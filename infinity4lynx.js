@@ -21,8 +21,13 @@ var lynxModName = "";
 var mondb=null;
 
 //===========================END FINE ==============================
-function buildFiles(thread) {
+function buildFiles(thread,threadid) {
   // build files
+
+ if(threadid === undefined)
+{
+  threadid = null;
+}
   var files=[];
   if (thread.files) {
     try {
@@ -35,6 +40,7 @@ function buildFiles(thread) {
 	{
 	 mimeType = "INVALID!";
 	}
+	buildGridMeta(infFiles,thread,threadid);
 	infFile.thumb_path = fixThumb(infFile.thumb_path);
 	infFile.file_path = fixImageUrl(infFile.file_path);
         files.push({
@@ -57,6 +63,56 @@ function buildFiles(thread) {
     }
   }
   return files;
+}
+
+function buildGridMeta(file,thread,reply)
+{
+  var isThread = true;
+  if(reply == null)
+  {
+    
+  }
+  else
+  {
+   isThread = false;
+  }
+
+	if(isThread)
+	{
+  	var obj = {
+		boardUri:thread.uri,
+		//boards = boards uri
+		//expiration:,
+		//get from thread id;
+		threadId:thread.id,
+		//postId:,
+		//status:,
+		//Get from thread
+		//date:,
+		type: "media",
+		lastModified:,
+	
+		};
+	}
+	else
+	}
+	  var obj = {
+		boardUri:thread.uri,
+		//boards = boards uri
+		//expiration:,
+		//get from thread id;
+		threadId:thread.id,
+		postId:reply,
+		//status:,
+		//Get from thread
+		type:media,
+		lastModified:,
+
+	
+		};	
+	}
+
+	
 }
 
 function repliesToLynx(uri, thread, callback) {
@@ -106,7 +162,7 @@ function repliesToLynx(uri, thread, callback) {
                 //console.log('writing email', thread.email);
                 obj.email=thread.email;
               }
-              var files=buildFiles(reply);
+              var files=buildFiles(reply,thread.id);
               if (files.length) {
                 obj.files=files;
               }
