@@ -1,6 +1,6 @@
 //============================= FINE ===========================
 var MongoClient = require('mongodb').MongoClient;
-//var mongodb = require('mongodb');
+var mongo = require('mongodb');
 var assert = require('assert');
 var mysql      = require('mysql');
 var crypto = require('crypto');
@@ -30,13 +30,18 @@ function buildFiles(thread) {
       console.log('there are', infFiles.length, 'files');
       for(var j=0;j<infFiles.length; j++) {
         var infFile=infFiles[j];
+	var mimeType = getMime(infFile.file_path);
+	if(mimeType == "ERROR")
+	{
+	 mimeType = "INVALID!";
+	}
 	infFile.thumb_path = fixThumb(infFile.thumb_path);
 	infFile.file_path = fixImageUrl(infFile.file_path);
         files.push({
           originalName: infFile.name,
           // b/src/1455X.gif => /biz/media/1.png
           path: infFile.file_path,
-        //  mime:
+          mime: mimeType,
           // thumb path: /biz/media/t_1.jpg
           thumb: infFile.thumb_path,
           // localname.jpg (1.jpg)
@@ -222,6 +227,69 @@ function fixThumb(th)
  return ret;
 }
 
+function getMime(img)
+{
+ var len = img.length
+
+ var foundDot=false;
+ var mimeType = "";
+ for(var i=0; i<len;i++)
+ {
+ 	var temp = img.substr(i,1);
+        if(temp == "." && foundDot == false)
+ 	{
+	  foundDot = true;
+	   mimeType = img.substr(i+1,img.length - i);
+	  console.log("found mimeType");	
+	}
+
+ }
+
+  if(foundDot == true)
+  {
+	if(mimeType == "png")
+	{
+	  mimeType = "image/png";
+	}
+	else if(mimeType == "jpg" || mimeType == "jpeg")
+	{
+	  mimeType = "image/jpeg";
+	}
+	else if(mimeType == "gif)
+	{
+	  mimeType = "image/gif";
+	}
+	else if(mimeType == "bmp")
+	{
+	  mimeType = "image/bmp";
+	}
+	else if(mimeType == "webm")
+	{
+	  mimeType = "video/webm";
+	  //Also accepts Audio webums	
+	}
+	else if(mimeType == "mpeg")
+	{
+	  mimeType = "audio/mpeg";
+	} 
+	else if(mimeType == "mp4")
+	{
+	  mimeType = "video/mp4";
+	}
+	else if(mimeType == "ogg")
+	{
+	  mimeType = "video/ogg";
+	}
+	else 
+	{
+	  console.log("ERROR: Invalid video format?");
+	  return "ERROR";
+	}
+	return mimeType;
+	
+  }
+}
+
 function fixImageUrl(img)
 {
   var len = img.length;
@@ -353,8 +421,7 @@ var writeData = function(data, dest, mime, meta, callback, archive) {
     if (error) {
       callback(error);
     } else {
-      exports
-          .writeDataOnOpenFile(gs, data, callback, archive, meta, mime, dest);
+      writeDataOnOpenFile(gs, data, callback, archive, meta, mime, dest);
     }
   });
 
@@ -372,7 +439,7 @@ var writeDataOnOpenFile = function(gs, data, callback, archive, meta, mime,
     if (error || !archive || noDaemon) {
       callback(error);
     } else {
-      archiveHandler.archiveData(data, destination, mime, meta, callback);
+      //archiveHandler.archiveData(data, destination, mime, meta, callback);
     }
 
   });
