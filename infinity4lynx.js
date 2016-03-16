@@ -3,13 +3,14 @@ var MongoClient = require('mongodb').MongoClient;
 //var mongodb = require('mongodb');
 var assert = require('assert');
 var mysql      = require('mysql');
- Grid = mongo.Grid;
+var crypto = require('crypto');
+ //Grid = mongo.Grid;
 
 // CONFIG
 var connection = mysql.createConnection({
   host     : 'localhost',
   user     : 'spacedust',
-  password : 'nicetry',
+  password : 'niceone',
   database : 'vichan'
 });
 var url = 'mongodb://localhost:27017/lynxchan';
@@ -27,13 +28,15 @@ function buildFiles(thread) {
     try {
       var infFiles=JSON.parse(thread.files);
       console.log('there are', infFiles.length, 'files');
-      for(var j in infFiles) {
+      for(var j=0;j<infFiles.length; j++) {
         var infFile=infFiles[j];
+	infFile.thumb_path = fixThumb(infFile.thumb_path);
+	infFile.file_path = fixImageUrl(infFile.file_path);
         files.push({
           originalName: infFile.name,
           // b/src/1455X.gif => /biz/media/1.png
           path: infFile.file_path,
-          //mime:
+        //  mime:
           // thumb path: /biz/media/t_1.jpg
           thumb: infFile.thumb_path,
           // localname.jpg (1.jpg)
@@ -61,11 +64,11 @@ function repliesToLynx(uri, thread, callback) {
         return; // no replies, no work
       }
       console.log('repliesToLynx - looking at', replies.length, 'for', thread.id);
-      for(var k in replies) {
+      for(var k =0; k <replies.length; k++) {
         var reply=replies[k];
 //	console.log("var Replys?",reply);
         // does reply exist in mongo?
-//        mondb.collection('posts').findOne({ boardUri: uri, threadId: thread.id, postId: reply.id }, function(err, lPost) {
+//        mondb.collection('posts'mo).findOne({ boardUri: uri, threadId: thread.id, postId: reply.id }, function(err, lPost) {
   //        if (err) {
             console.error('boardToLynx - mongo.replies', err);
     //      } else {
@@ -74,6 +77,10 @@ function repliesToLynx(uri, thread, callback) {
               // create post
               // id?
               // signedRole
+	      var reply_salt = crypto.createHash('sha256').update("gunshot gunshot Cash registernoise" + Math.random() + new Date()).digest('hex');
+	     //stipe message of tabs and stuff
+		var replymessage = reply.body_nomarkup.toLowerCase().replace(/[ \n\t]/g, '');
+  		var objreplymessage = crypto.createHash('md5').update(replymessage).digest('base64');
               var obj={
                 boardUri: uri,
                 threadId: thread.id,
@@ -81,6 +88,8 @@ function repliesToLynx(uri, thread, callback) {
                 creation: new Date(reply.time*1000),
                 ip: reply.ip.split(/\./),
                 message: reply.body_nomarkup,
+		hash: objreplymessage, //stuff used for R9K
+ 		salt: reply_salt, //ID generation
                 name: reply.name,
                 subject: reply.subject, // empty subject is null in lynx too
 		markdown: reply.body,
@@ -114,7 +123,7 @@ function boardToLynx(uri) {
   connection.query('SELECT * from posts_'+uri+' where thread IS NULL', function(err, threads) {
     console.log('found', threads.length, 'threads in', uri);
     // does this thread exist in LynxChan?
-    for(var i in threads) {
+    for(var i =0; i<threads.length;i++) {
       var thread=threads[i];
       var scopeLoop=function(thread) {
       //  mondb.collection('threads').findOne({ boardUri: uri, threadId: thread.id }, function(err, lThread) {
@@ -127,13 +136,20 @@ function boardToLynx(uri) {
               // id/signedRole? <=> trip/capcode?
               // markdown version?
               // salt?
-              var obj={
+             var thread_salt = crypto.createHash('sha256').update("gunshot gunshot Cash registernoise" + Math.random() + new Date()).digest('hex');
+
+       		var threadmessage = thread.body_nomarkup.toLowerCase().replace(/[ \n\t]/g, '');
+  		var objthreadmessage = crypto.createHash('md5').update(threadmessage).digest('base64');     
+		
+		var obj={
                 boardUri: uri,
                 threadId: thread.id,
                 creation: new Date(thread.time*1000),
                 lastBump: new Date(thread.bump*1000),
                 ip: thread.ip.split(/\./),
                 message: thread.body_nomarkup,
+		hash: objthreadmessage,//used for r9k
+		salt: thread_salt,
                 name: thread.name,
                 pinned: thread.sticky?true:false,
                 locked: thread.locked?true:false,
@@ -174,15 +190,72 @@ function mod2lynxchan()
 function fixThumb(th)
 {
   var len = th.length;
+  var Act = th;
+  var firstSlash = false;
+  var secondSlash = false;
+  var foundSlash = "";
+  var foundSecondSlash= "";
   for(var i =0; i<len; i++)
   {
-	
+	var temp = Act.substr(i,1);
+	console.log("TEMP IS: " + temp);
+	if("/" == temp && firstSlash == false)
+	{
+	  firstSlash = true;
+	  console.log("thumbnail full is " + Act );
+	  console.log("location of first slash " + Act.substr(0,i));
+	  foundSlash = Act.substr(0,i);
+	  
+	}
+	else if("/" == temp && firstSlash == true && secondSlash == false)
+	{
+	   secondSlash = true;
+	   console.log("secondslas? ", secondSlash);
+	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	   foundSecondSlash = Act.substr(i+1,Act.length - i);
+	   
+	}
   }
+  console.log(foundSlash + "/thumb/t_" + foundSecondSlash);
+  var ret = "/" + foundSlash + "/thumb/t_" + foundSecondSlash;
+// var ret = "/thumb/t_"+ foundSecondSlash; 
+ return ret;
 }
 
-function fixImageUrl()
+function fixImageUrl(img)
 {
-
+  var len = img.length;
+  var Act = img;
+  console.log("Fiximageurl IMG? ",img);
+  var firstSlash = false;
+  var secondSlash = false;
+  var foundSlash = "";
+  var foundSecondSlash= "";
+  for(var i =0; i<len; i++)
+  {
+	var temp = Act.substr(i,1);
+	console.log("TEMP IS: " + temp);
+	if("/" == temp && firstSlash == false)
+	{
+	  firstSlash = true;
+	  console.log("thumbnail full is " + Act );
+	  console.log("location of first slash " + Act.substr(0,i));
+	  foundSlash = Act.substr(0,i);
+	  
+	}
+	else if("/" == temp && firstSlash == true && secondSlash == false)
+	{
+	   secondSlash = true;
+	   console.log("secondslas? ", secondSlash);
+	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	   foundSecondSlash = Act.substr(i+1,Act.length - i);
+	   
+	}
+  }
+  console.log(foundSlash + "/media/" + foundSecondSlash);
+  var ret = "/" + foundSlash + "/media/" + foundSecondSlash;
+// var ret =  "/media/" + foundSecondSlash; 
+ return ret;
 }
 
 
@@ -213,23 +286,24 @@ MongoClient.connect(url, function(err, conn) {
     // get list of boards
     connection.query('SELECT * from boards', function(err, boards) {
       // connected! (unless `err` is set)
-      console.log('checking', boards.length, 'board');
+      //console.log('checking', boards.length, 'board');
 //Loops through boards      
 
 //This code broke
 	//for(var i = 0; i<boards.length; i++)
 	 for(var i in boards) {
-	console.log("i is:", i);
+	//console.log("i is:", i);
         var board=boards[i];
-	console.log("BOARD IS?",board.uri);
+	//console.log("BOARD IS?",board.uri);
         // does board exit
       //  mondb.collection('boards').findOne({ boardUri: board.uri }, function(err, lboard) {
-	  console.log("Uri? ", board.uri);
-	  console.log("what is I inside mondb ", i);
+	 // console.log("Uri? ", board.uri);
+	//  console.log("what is I inside mondb ", i);
 	// console.log("Lboard?", lboard);
         //  if (!lboard) {
             // TODO: query mods for owner
             // TODO: query board_tags for tags
+	    var board_salt = crypto.createHash('sha256').update("gunshot gunshot Cash registernoise" + Math.random() + new Date()).digest('hex');
             console.log('board', board.uri, 'DNE in lynx, need to create.');
             var obj={
               boardUri: board.uri,
@@ -237,6 +311,7 @@ MongoClient.connect(url, function(err, conn) {
               boardDescription: board.subtitle,
               settings: ["disableIds", "requireThreadFile"],
               tags: [],
+	      salt: board_salt,
             };
 		//Function 
             lynxCreate('boards', obj, function() {
@@ -255,5 +330,52 @@ MongoClient.connect(url, function(err, conn) {
       }
     });
   });
+ console.log("AT END OF IMPORT");
 });
+
+
+//Nicked from LynxChan be/engine/gridFsHandler.js
+var writeData = function(data, dest, mime, meta, callback, archive) {
+
+  meta.lastModified = new Date();
+
+  if (verbose) {
+    console.log('Writing data on gridfs under \'' + dest + '\'');
+  }
+
+  var gs = mongo.GridStore(conn, dest, 'w', {
+    'content_type' : mime,
+    metadata : meta
+  });
+
+  gs.open(function openedGs(error, gs) {
+
+    if (error) {
+      callback(error);
+    } else {
+      exports
+          .writeDataOnOpenFile(gs, data, callback, archive, meta, mime, dest);
+    }
+  });
+
+};
+
+var writeDataOnOpenFile = function(gs, data, callback, archive, meta, mime,
+    destination) {
+
+  if (typeof (data) === 'string') {
+    data = new Buffer(data, 'utf-8');
+  }
+
+  gs.write(data, true, function wroteData(error) {
+
+    if (error || !archive || noDaemon) {
+      callback(error);
+    } else {
+      archiveHandler.archiveData(data, destination, mime, meta, callback);
+    }
+
+  });
+
+};
 //=============================END FINE============================
