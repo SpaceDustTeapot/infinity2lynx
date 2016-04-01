@@ -5,7 +5,6 @@ var assert = require('assert');
 var mysql      = require('mysql');
 var crypto = require('crypto');
  //Grid = mongo.Grid;
-
 // CONFIG
 var connection = mysql.createConnection({
   host     : 'localhost',
@@ -24,7 +23,7 @@ var mondb=null;
 function buildFiles(thread,threadid) {
   // build files
 
- if(threadid === undefined)
+ if(threadid == undefined)
 {
   threadid = null;
 }
@@ -40,7 +39,9 @@ function buildFiles(thread,threadid) {
 	{
 	 mimeType = "INVALID!";
 	}
-	buildGridMeta(infFiles,thread,threadid);
+	var tempo = fixImageUrl(infFile.file_path);
+	var rthumb = fixThumb(infFile.thumb_path);
+	buildGridMeta(infFile,thread,threadid,mimeType,tempo,rthumb,infFile.thumb_path);
 	infFile.thumb_path = fixThumb(infFile.thumb_path);
 	infFile.file_path = fixImageUrl(infFile.file_path);
         files.push({
@@ -65,19 +66,22 @@ function buildFiles(thread,threadid) {
   return files;
 }
 
-function buildGridMeta(file,thread,reply)
+function buildGridMeta(file,thread,reply,mimes,fixedfile,realthumb,thumb)
 {
   var isThread = true;
+console.log("Broke1");
   if(reply == null)
   {
-    
+    console.log("broke2");
   }
   else
   {
+  console.log("broke3");
    isThread = false;
   }
-
-	if(isThread)
+  console.log("isThread?: " + isThread);
+  console.log("brok4");
+	if(isThread == true)
 	{
   	var obj = {
 		boardUri:thread.uri,
@@ -90,12 +94,12 @@ function buildGridMeta(file,thread,reply)
 		//Get from thread
 		//date:,
 		type: "media",
-		lastModified:,
+		//lastModified:new Date(reply.time*1000),
 	
 		};
 	}
 	else
-	}
+	{
 	  var obj = {
 		boardUri:thread.uri,
 		//boards = boards uri
@@ -105,14 +109,19 @@ function buildGridMeta(file,thread,reply)
 		postId:reply,
 		//status:,
 		//Get from thread
-		type:media,
-		lastModified:,
+		type:"media",
+		//lastModified: new Date(reply.time*1000) ,
 
 	
 		};	
 	}
+console.log("broke5");
+	//writeFile = function(path, dest, mime, meta, callback, archive)
 
-	
+	writeFile(file.file_path,fixedfile,mimes,obj);
+	writeFile(thumb,realthumb,mimes,obj);
+	console.log(file.file_path +" "+ fixedfile + " " + mimes); 
+
 }
 
 function repliesToLynx(uri, thread, callback) {
@@ -311,7 +320,7 @@ function getMime(img)
 	{
 	  mimeType = "image/jpeg";
 	}
-	else if(mimeType == "gif)
+	else if(mimeType == "gif")
 	{
 	  mimeType = "image/gif";
 	}
@@ -398,6 +407,7 @@ function lynxCreate(table, obj, callback) {
 
 MongoClient.connect(url, function(err, conn) {
   mondb=conn;
+  mong = mondb;
   assert.equal(null, err);
   console.log("Connected correctly to mongodb server.");
   connection.connect(function(err) {
@@ -459,15 +469,19 @@ MongoClient.connect(url, function(err, conn) {
 
 
 //Nicked from LynxChan be/engine/gridFsHandler.js
-var writeData = function(data, dest, mime, meta, callback, archive) {
 
+function writeFile(path, dest, mime, meta) {
+ console.log("WRITE FILE CALLED!");
   meta.lastModified = new Date();
 
-  if (verbose) {
-    console.log('Writing data on gridfs under \'' + dest + '\'');
-  }
+//  if (verbose) {
+    var message = 'Writing ' + mime + ' file on gridfs under \'';
+    message += dest + '\'';
+    console.log(message);
+//  }
 
-  var gs = mongo.GridStore(conn, dest, 'w', {
+//  var gs = mongo.GridStore(conn, dest, 'w', {
+    var gs = mongo.GridStore(mondb, dest,'w',{
     'content_type' : mime,
     metadata : meta
   });
@@ -477,28 +491,26 @@ var writeData = function(data, dest, mime, meta, callback, archive) {
     if (error) {
       callback(error);
     } else {
-      writeDataOnOpenFile(gs, data, callback, archive, meta, mime, dest);
+          writeFileOnOpenFile(gs, path, dest, meta, mime);
     }
   });
 
 };
 
-var writeDataOnOpenFile = function(gs, data, callback, archive, meta, mime,
-    destination) {
+var writeFileOnOpenFile = function(gs, path, destination, meta, mime) {
+  gs.writeFile(path, function wroteFile(error) {
 
-  if (typeof (data) === 'string') {
-    data = new Buffer(data, 'utf-8');
-  }
+    // style exception, too simple
+    gs.close(function closed(closeError, result) {
+      if ( error) {
+//        callback(error || closeError);
+      } else {
+      //  archiveHandler.writeFile(path, destination, mime, meta, callback);
+      }
 
-  gs.write(data, true, function wroteData(error) {
-
-    if (error || !archive || noDaemon) {
-      callback(error);
-    } else {
-      //archiveHandler.archiveData(data, destination, mime, meta, callback);
-    }
+    });
+    // style exception, too simple
 
   });
-
 };
 //=============================END FINE============================
