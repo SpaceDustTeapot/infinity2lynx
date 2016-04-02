@@ -15,6 +15,7 @@ var connection = mysql.createConnection({
 var url = 'mongodb://localhost:27017/lynxchan';
 
 var lynxModName = "";
+//var board[];
 
 // setup
 var mondb=null;
@@ -68,19 +69,20 @@ function buildFiles(thread,threadid) {
 
 function buildGridMeta(file,thread,reply,mimes,fixedfile,realthumb,thumb)
 {
+//todo remove pointless logging stuff since FUNC now works
   var isThread = true;
-console.log("Broke1");
+//console.log("Broke1");
   if(reply == null)
   {
-    console.log("broke2");
+  //  console.log("broke2");
   }
   else
   {
-  console.log("broke3");
+  //console.log("broke3");
    isThread = false;
   }
-  console.log("isThread?: " + isThread);
-  console.log("brok4");
+ // console.log("isThread?: " + isThread);
+  //console.log("brok4");
 	if(isThread == true)
 	{
   	var obj = {
@@ -115,7 +117,7 @@ console.log("Broke1");
 	
 		};	
 	}
-console.log("broke5");
+	//console.log("broke5");
 	//writeFile = function(path, dest, mime, meta, callback, archive)
 
 	writeFile(file.file_path,fixedfile,mimes,obj);
@@ -134,7 +136,7 @@ function repliesToLynx(uri, thread, callback) {
         return; // no replies, no work
       }
       console.log('repliesToLynx - looking at', replies.length, 'for', thread.id);
-      for(var k =0; k <replies.length; k++) {
+      for(var k =0; k < replies.length; k++) {
         var reply=replies[k];
 //	console.log("var Replys?",reply);
         // does reply exist in mongo?
@@ -180,6 +182,9 @@ function repliesToLynx(uri, thread, callback) {
       //          boardToLynx(uri);
             });
 	     console.log("at end of replies2lynx");
+	     console.log("K is?",k);
+	    //testing to see what return does
+		//return;
            // }
          // }
         //});
@@ -193,7 +198,7 @@ function boardToLynx(uri) {
   connection.query('SELECT * from posts_'+uri+' where thread IS NULL', function(err, threads) {
     console.log('found', threads.length, 'threads in', uri);
     // does this thread exist in LynxChan?
-    for(var i =0; i<threads.length;i++) {
+    for(var i =0; i < threads.length;i++) {
       var thread=threads[i];
       var scopeLoop=function(thread) {
       //  mondb.collection('threads').findOne({ boardUri: uri, threadId: thread.id }, function(err, lThread) {
@@ -238,7 +243,7 @@ function boardToLynx(uri) {
               }
              // console.log('would create thread', thread.id, obj);
 	 	lynxCreate("threads",obj, function(){
-		 console.log("Threads updated");	
+		// console.log("Threads updated");	
 		});
            // }
             // check for new posts
@@ -268,25 +273,25 @@ function fixThumb(th)
   for(var i =0; i<len; i++)
   {
 	var temp = Act.substr(i,1);
-	console.log("TEMP IS: " + temp);
+	//console.log("TEMP IS: " + temp);
 	if("/" == temp && firstSlash == false)
 	{
 	  firstSlash = true;
-	  console.log("thumbnail full is " + Act );
-	  console.log("location of first slash " + Act.substr(0,i));
+	//  console.log("thumbnail full is " + Act );
+	//  console.log("location of first slash " + Act.substr(0,i));
 	  foundSlash = Act.substr(0,i);
 	  
 	}
 	else if("/" == temp && firstSlash == true && secondSlash == false)
 	{
 	   secondSlash = true;
-	   console.log("secondslas? ", secondSlash);
-	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	//   console.log("secondslas? ", secondSlash);
+	//   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
 	   foundSecondSlash = Act.substr(i+1,Act.length - i);
 	   
 	}
   }
-  console.log(foundSlash + "/thumb/t_" + foundSecondSlash);
+ // console.log(foundSlash + "/thumb/t_" + foundSecondSlash);
   var ret = "/" + foundSlash + "/thumb/t_" + foundSecondSlash;
 // var ret = "/thumb/t_"+ foundSecondSlash; 
  return ret;
@@ -305,7 +310,7 @@ function getMime(img)
  	{
 	  foundDot = true;
 	   mimeType = img.substr(i+1,img.length - i);
-	  console.log("found mimeType");	
+	//  console.log("found mimeType");	
 	}
 
  }
@@ -359,7 +364,7 @@ function fixImageUrl(img)
 {
   var len = img.length;
   var Act = img;
-  console.log("Fiximageurl IMG? ",img);
+ // console.log("Fiximageurl IMG? ",img);
   var firstSlash = false;
   var secondSlash = false;
   var foundSlash = "";
@@ -367,25 +372,25 @@ function fixImageUrl(img)
   for(var i =0; i<len; i++)
   {
 	var temp = Act.substr(i,1);
-	console.log("TEMP IS: " + temp);
+	//console.log("TEMP IS: " + temp);
 	if("/" == temp && firstSlash == false)
 	{
 	  firstSlash = true;
-	  console.log("thumbnail full is " + Act );
-	  console.log("location of first slash " + Act.substr(0,i));
+	  //console.log("thumbnail full is " + Act );
+	  //console.log("location of first slash " + Act.substr(0,i));
 	  foundSlash = Act.substr(0,i);
 	  
 	}
 	else if("/" == temp && firstSlash == true && secondSlash == false)
 	{
 	   secondSlash = true;
-	   console.log("secondslas? ", secondSlash);
-	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	 //  console.log("secondslas? ", secondSlash);
+	  // console.log("location of second slash " + Act.substr(i+1,Act.length - i));
 	   foundSecondSlash = Act.substr(i+1,Act.length - i);
 	   
 	}
   }
-  console.log(foundSlash + "/media/" + foundSecondSlash);
+ // console.log(foundSlash + "/media/" + foundSecondSlash);
   var ret = "/" + foundSlash + "/media/" + foundSecondSlash;
 // var ret =  "/media/" + foundSecondSlash; 
  return ret;
@@ -454,6 +459,7 @@ MongoClient.connect(url, function(err, conn) {
 	      console.log(" board should be created. :^( ", board.uri);
             });
 	   boardToLynx(board.uri);
+	   console.log("outside boardToLynx");
 
 	      
        //   } else {
@@ -471,7 +477,7 @@ MongoClient.connect(url, function(err, conn) {
 //Nicked from LynxChan be/engine/gridFsHandler.js
 
 function writeFile(path, dest, mime, meta) {
- console.log("WRITE FILE CALLED!");
+ //console.log("WRITE FILE CALLED!");
   meta.lastModified = new Date();
 
 //  if (verbose) {
@@ -513,4 +519,12 @@ var writeFileOnOpenFile = function(gs, path, destination, meta, mime) {
 
   });
 };
+
+function fixpostcount()
+{
+  mondb.collection('boards').findOne({ boardUri: board.uri }, function(err, lboard) {
+  
+
+  });
+}
 //=============================END FINE============================
