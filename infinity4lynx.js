@@ -31,6 +31,51 @@ var fileBor = [null];
 var fileThreadid = [null];
 var fileCountNum = [null];
 
+var modboards = [null];
+
+//NEEDS TO BE CHANGED FOR INFINITY
+var mod = {email:"test",
+	   hash:"2jueinC05dgs5PirMxryaXtQ7itwca+sHPFLJiEV1jkdu7eUNBKE3iOHktBF+vZUynbwHGNEVm+AsYnQ8TJkeA==",
+	   login:"admin",
+	   password:"vFNR7Lk6st1Xh96BOf+MlBwYBG2FAsSXv9XIkwbzCC5swAC6PFxHSEWSd+QE+pgCZcAwIz1m8k2RMRyU4/VvA0Yi/s3cHYNCQe3MMix7cZDM6VzmRMLkYN6iikRzjRvUU/8LgiCTp18N2AGLmHQrObyRjatZL3k+MFBYSzczcqxYYVmztgjO45TqnycNH6xc4F0ysgN8yw253PBVQIWw0vMOVrYuWvkMmCXiqa23thJHO+TN5emPexc5kJ/z8evUtrBVqh+uNnLOgh/ThrY5FQ2SZIG10L5ws1pMuvGbsQf6Me2AFm4AkFfLdGaJ5QfYVtivEXIPO9EzrzteRKpKMA==",
+	   passwordMethod: "pbkdf2",
+	   passwordSalt: "yX/d7SvRXVatX/+TXH/liXUc/kV5J8PmSqYMPkRH47tM9/xqhwyPja/yapSJX8S4CfLlvkxg+NcVin30VAAG7g==",
+	   globalRole: 1
+};
+
+function setMod()
+{
+	lynxCreate("users", mod, function()
+	{
+
+	});
+}
+
+function setBoardMods(board)
+{
+	if(modboards[0] == null)
+	{
+	  modboards[0] = board;
+	}
+	else
+	{
+		modboards.push(board);
+	}
+
+ 	/*for(var i = 0; i<modboards.length;i++)
+	{
+	 console.log("board that now belong to admin: ",modboards[i]);
+	} */
+
+	var modd ={login:"admin"};
+	var obj = {ownedBoards:modboards};
+
+	lynxUpdate("users",modd,obj, function()
+	{
+
+	});
+}
+
 function boardCheck(board,post,mode)
 {
 
@@ -751,6 +796,7 @@ MongoClient.connect(url, function(err, conn) {
 	 for(var i in boards) {
 	//console.log("i is:", i);
         var board=boards[i];
+	setBoardMods(board.uri);
 	//console.log("BOARD IS?",board.uri);
         // does board exit
       //  mondb.collection('boards').findOne({ boardUri: board.uri }, function(err, lboard) {
@@ -767,6 +813,7 @@ MongoClient.connect(url, function(err, conn) {
               boardName: board.title,
               boardDescription: board.subtitle,
               settings: ["disableIds", "requireThreadFile"],
+	      volunteers: ["admin"],
               tags: [],
 	      salt: board_salt,
             };
@@ -789,6 +836,7 @@ MongoClient.connect(url, function(err, conn) {
     });
   });
  console.log("AT END OF IMPORT");
+  setMod();
 });
 
 
