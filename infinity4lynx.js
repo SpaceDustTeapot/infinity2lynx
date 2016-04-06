@@ -26,6 +26,11 @@ var postidi = [null];
 var threadidi = [null];
 var threadcount =[null];
 
+
+var fileBor = [null];
+var fileThreadid = [null];
+var fileCountNum = [null];
+
 function boardCheck(board,post,mode)
 {
 
@@ -129,7 +134,7 @@ function boardCheck(board,post,mode)
 			checkarry.push(k);
 		}
 	   }
-	 console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k]);
+	// console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k]);
 	}
 	//clean
 	for(var l =0; l<checkarry.length;l++)
@@ -139,7 +144,7 @@ function boardCheck(board,post,mode)
 
 	for(var k=0; k<len;k++)
 	{
-	   console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k],"ThreadCount: ",threadcount[k]);
+	//   console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k],"ThreadCount: ",threadcount[k]);
 	}
 //end patch
 	//post it
@@ -216,6 +221,62 @@ console.log("board: ",state.board," Postid: ",state.postid," threadid: ",state.t
 	}
 
 	*/
+}
+
+
+function getFileCount(uri,ThreadID,FileLength)
+{
+	
+   if(FileLength == 1)
+   {	
+	if(fileBor[0] == null)
+	{ 
+	  fileBor[0] = uri;
+	  fileThreadid[0] = ThreadID;
+	  fileCountNum[0] = 1; 	
+	}
+	else
+	{
+	 var foundFlag=false;
+	  for(var i =0; i<fileBor.length;i++)
+	  {
+	     if(fileBor[i] == uri)
+	     {
+		if(fileThreadid[i] == ThreadID)
+		{
+		  foundFlag = true;
+		  fileCountNum[i] = fileCountNum[i] + 1;
+		}
+	     }
+	  }
+	  if(foundFlag == false)
+	  {
+		fileBor.push(uri);
+		fileThreadid.push(ThreadID);
+		fileCountNum.push(1);
+	  }
+	
+	}
+   }
+
+	for(var k =0; k<fileBor.length;k++)
+	{
+	  console.log("Board: ",fileBor[k]," FileThreadID: ",fileThreadid[k]," fileCount: ",fileCountNum[k]);
+	}
+
+	for(var p =0; p<fileBor.length; p++)
+	{
+	 var bo = {boardUri:fileBor[p],threadId:fileThreadid[p]};
+		
+			var obj = {fileCount: fileCountNum[p]};
+		  
+		
+			lynxUpdate("threads",bo,obj, function(){
+
+			});
+	}
+	
+
 }
 
 //===========================END FINE ==============================
@@ -377,6 +438,8 @@ function repliesToLynx(uri, thread, callback) {
               if (files.length) {
                 obj.files=files;
               }
+		//console.log("Files length is? ",files.length);
+		getFileCount(uri,thread.id,files.length);
 		boardCheck(uri,reply.id,0);
              // console.log('would create', uri+'/'+thread.id+'/'+reply.id, obj);
 		lynxCreate('posts', obj, function() {
@@ -458,7 +521,7 @@ function boardToLynx(uri) {
                 ip: thread.ip.split(/\./),
 		//postCount: 0,
 		//Vichan supports only 1 file, Infinity supports multiple		
-		fileCount: 1,
+		fileCount: 0,
 		page: 1,
                 message: thread.body_nomarkup,
 		hash: objthreadmessage,//used for r9k
