@@ -24,6 +24,7 @@ var state = {board:null, postid:0,threadid:0};
 var bor = [null];
 var postidi = [null];
 var threadidi = [null];
+var threadcount =[null];
 
 function boardCheck(board,post,mode)
 {
@@ -34,6 +35,7 @@ function boardCheck(board,post,mode)
 	  if(mode == 1)
 	  {
 		threadidi[0] = post;
+		threadcount[0] = 1;
 	  }
 	  else 
 	  {
@@ -59,6 +61,7 @@ function boardCheck(board,post,mode)
 		  {
 		    
 		    threadidi[i] = post;
+		    threadcount[i] = threadcount[i] + 1;
 		   
 		  }
 		  else
@@ -73,6 +76,7 @@ function boardCheck(board,post,mode)
 	  {
 		bor.push(board);
 		threadidi.push(1911);
+		threadcount.push(0);
 		postidi.push(777);		
 		  var len = bor.length;
 		  var foundBoard = false;
@@ -91,7 +95,7 @@ function boardCheck(board,post,mode)
 		  {
 		    
 		    threadidi[i] = post;
-		   
+		    threadcount[i] = threadcount[i] + 1;
 		  }
 		  else
 		  {
@@ -135,7 +139,7 @@ function boardCheck(board,post,mode)
 
 	for(var k=0; k<len;k++)
 	{
-	   console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k]);
+	   console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k],"ThreadCount: ",threadcount[k]);
 	}
 //end patch
 	//post it
@@ -144,15 +148,15 @@ function boardCheck(board,post,mode)
 	 var bo = {boardUri:bor[p]};
 		  if(threadidi[p] > postidi[p])
 		  {
-			var obj = {lastPostId: threadidi[p]};
+			var obj = {lastPostId: threadidi[p],threadCount:threadcount[p]};
 		  }
 		  else if(postidi[p] == "777")
 		  {
-			var obj = {lastPostId: threadidi[p]};
+			var obj = {lastPostId: threadidi[p],threadCount:threadcount[p]};
 		  }
 		  else
 		  {
-			var obj = {lastPostId: postidi[p]};
+			var obj = {lastPostId: postidi[p],threadCount:threadcount[p]};
 		  }
 			lynxUpdate("boards",bo,obj, function(){
 
