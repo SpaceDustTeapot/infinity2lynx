@@ -15,9 +15,204 @@ var connection = mysql.createConnection({
 var url = 'mongodb://localhost:27017/lynxchan';
 
 var lynxModName = "";
+//var board[];
 
 // setup
 var mondb=null;
+
+var state = {board:null, postid:0,threadid:0};
+var bor = [null];
+var postidi = [null];
+var threadidi = [null];
+
+function boardCheck(board,post,mode)
+{
+
+	if(bor[0] == null)
+	{
+	  bor[0] = board;
+	  if(mode == 1)
+	  {
+		threadidi[0] = post;
+	  }
+	  else 
+	  {
+		postidi[0] = post;
+	  }
+	}
+	else
+	{
+	  var len = bor.length;
+	  var foundBoard = false;
+	  for(var i =0;i<len;i++)
+	  {
+		if(board == bor[i])
+		{
+		  var foundi = i;
+		  foundBoard = true;
+		}
+		
+
+		if(foundBoard == true)
+		{
+		  if(mode == 1)
+		  {
+		    
+		    threadidi[i] = post;
+		   
+		  }
+		  else
+		  {
+	
+		    postidi[i] = post;
+		  }
+		}
+	  }
+
+	  if(foundBoard == false)
+	  {
+		bor.push(board);
+		threadidi.push(1911);
+		postidi.push(777);		
+		  var len = bor.length;
+		  var foundBoard = false;
+		  for(var i =0;i<len;i++)
+	 	 {
+		if(board == bor[i])
+		{
+		  var foundi = i;
+		  foundBoard = true;
+		}
+		
+
+		if(foundBoard == true)
+		{
+		  if(mode == 1)
+		  {
+		    
+		    threadidi[i] = post;
+		   
+		  }
+		  else
+		  {
+	
+		    postidi[i] = post;
+		  }
+		}
+	  	}
+	  }
+	  
+	}
+
+	//If board has post and thread.... remove this "patch"
+	if(postidi[len-1] == postidi[len - 2])
+	{
+	  postidi[len-1] = "777";
+	}
+
+	var checkarry = [];
+	//debug for loop
+	for(var k =0;k<len;k++)
+	{
+	   if(k==0)
+	   {
+	   }
+	   else
+	   {
+		//weird bug if no posts
+		if(postidi[k] == postidi[k-1])
+		{
+			checkarry.push(k);
+		}
+	   }
+	 console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k]);
+	}
+	//clean
+	for(var l =0; l<checkarry.length;l++)
+	{
+	   postidi[checkarry[l]] = "777";
+	}
+
+	for(var k=0; k<len;k++)
+	{
+	   console.log("Board: ",bor[k]," threadid: ",threadidi[k]," postidi: ",postidi[k]);
+	}
+//end patch
+	//post it
+	for(var p =0; p<len; p++)
+	{
+	 var bo = {boardUri:bor[p]};
+		  if(threadidi[p] > postidi[p])
+		  {
+			var obj = {lastPostId: threadidi[p]};
+		  }
+		  else if(postidi[p] == "777")
+		  {
+			var obj = {lastPostId: threadidi[p]};
+		  }
+		  else
+		  {
+			var obj = {lastPostId: postidi[p]};
+		  }
+			lynxUpdate("boards",bo,obj, function(){
+
+			});
+	}
+
+/*
+console.log("board: ",state.board," Postid: ",state.postid," threadid: ",state.threadid);
+	//mode = 1 - Thread, mode = 2, post
+	if(state.board == board)
+	{
+	   if(mode == 1)
+	   {
+	   	
+		state.threadid = post;	
+	   }
+	   else
+	   {
+		state.postid = post
+           }	
+	}
+	else
+	{
+		if(state.board == null)
+		{
+		   if(mode == 1)
+		   {
+			state.threadid = post;
+		   }
+		   else
+		   {
+			state.postid = post;
+ 		   }
+		}
+		else
+		{
+		  if(state.threadid > state.postid)
+		  {
+			var obj = {lastPostId: state.threadid};
+		  }
+		  else
+		  {
+			var obj = {lastPostId: state.postid};
+		  }
+
+		 var bo = {boardUri:state.board};
+		 console.log("Boaruri: ",bo.boardUri, "ID should be: ",obj.lastPostId);
+			lynxUpdate("boards",bo,obj, function(){
+
+			});
+			
+		}
+	  //send off state and update board
+	  state.board = board;
+	//  state.threadid = 0;
+	//  state.postid = 0;
+	}
+
+	*/
+}
 
 //===========================END FINE ==============================
 function buildFiles(thread,threadid) {
@@ -68,19 +263,20 @@ function buildFiles(thread,threadid) {
 
 function buildGridMeta(file,thread,reply,mimes,fixedfile,realthumb,thumb)
 {
+//todo remove pointless logging stuff since FUNC now works
   var isThread = true;
-console.log("Broke1");
+//console.log("Broke1");
   if(reply == null)
   {
-    console.log("broke2");
+  //  console.log("broke2");
   }
   else
   {
-  console.log("broke3");
+  //console.log("broke3");
    isThread = false;
   }
-  console.log("isThread?: " + isThread);
-  console.log("brok4");
+ // console.log("isThread?: " + isThread);
+  //console.log("brok4");
 	if(isThread == true)
 	{
   	var obj = {
@@ -115,7 +311,7 @@ console.log("Broke1");
 	
 		};	
 	}
-console.log("broke5");
+	//console.log("broke5");
 	//writeFile = function(path, dest, mime, meta, callback, archive)
 
 	writeFile(file.file_path,fixedfile,mimes,obj);
@@ -134,7 +330,9 @@ function repliesToLynx(uri, thread, callback) {
         return; // no replies, no work
       }
       console.log('repliesToLynx - looking at', replies.length, 'for', thread.id);
-      for(var k =0; k <replies.length; k++) {
+      for(var k =0; k < replies.length; k++) {
+	console.log("Board: ",uri," Replys.length: ", replies.length);
+	findPostcount(uri,replies.length,thread.id);
         var reply=replies[k];
 //	console.log("var Replys?",reply);
         // does reply exist in mongo?
@@ -175,11 +373,15 @@ function repliesToLynx(uri, thread, callback) {
               if (files.length) {
                 obj.files=files;
               }
-              console.log('would create', uri+'/'+thread.id+'/'+reply.id, obj);
+		boardCheck(uri,reply.id,0);
+             // console.log('would create', uri+'/'+thread.id+'/'+reply.id, obj);
 		lynxCreate('posts', obj, function() {
       //          boardToLynx(uri);
             });
 	     console.log("at end of replies2lynx");
+	     console.log("K is?",k);
+	    //testing to see what return does
+		//return;
            // }
          // }
         //});
@@ -188,13 +390,40 @@ function repliesToLynx(uri, thread, callback) {
   });
 }
 
+function findPostcount(uri,reply,threadid)
+{
+  var id = { boardUri: uri,
+	     threadId: threadid
+	  };
+
+if(reply == 0)
+{
+
+}
+else
+{	if(reply > 5)
+	{
+	  reply = 5;
+	}
+  	var emptyArray = [0];
+
+  	var postcount = {postCount: reply,latestPosts:emptyArray};
+
+ 	lynxUpdate("threads",id,postcount, function(){
+
+	});
+}	
+}
+
 function boardToLynx(uri) {
   // get a list of threads
   connection.query('SELECT * from posts_'+uri+' where thread IS NULL', function(err, threads) {
+
     console.log('found', threads.length, 'threads in', uri);
     // does this thread exist in LynxChan?
-    for(var i =0; i<threads.length;i++) {
+    for(var i =0; i < threads.length;i++) {
       var thread=threads[i];
+    
       var scopeLoop=function(thread) {
       //  mondb.collection('threads').findOne({ boardUri: uri, threadId: thread.id }, function(err, lThread) {
         //  if (err) {
@@ -211,12 +440,22 @@ function boardToLynx(uri) {
        		var threadmessage = thread.body_nomarkup.toLowerCase().replace(/[ \n\t]/g, '');
   		var objthreadmessage = crypto.createHash('md5').update(threadmessage).digest('base64');     
 		
+		//obviously its going to be one :^)
+	   
+	      	
 		var obj={
                 boardUri: uri,
                 threadId: thread.id,
                 creation: new Date(thread.time*1000),
                 lastBump: new Date(thread.bump*1000),
+		//Someboards have ID enabled
+		id :null,
+		email:null,
                 ip: thread.ip.split(/\./),
+		//postCount: 0,
+		//Vichan supports only 1 file, Infinity supports multiple		
+		fileCount: 1,
+		page: 1,
                 message: thread.body_nomarkup,
 		hash: objthreadmessage,//used for r9k
 		salt: thread_salt,
@@ -227,18 +466,23 @@ function boardToLynx(uri) {
                 password: thread.password,
 		markdown: thread.body,
               };
-              var files=buildFiles(thread);
-              if (files.length) {
-                obj.files=files;
-              }
+            
               // what does NULL do? this isn't triggered on NULL
               if (thread.email) {
                 //console.log('writing email', thread.email);
                 obj.email=thread.email;
               }
+
+		 var files=buildFiles(thread);
+	
+              if (files.length) {
+                obj.files=files;
+		
+              }
+		boardCheck(uri,thread.id,1);
              // console.log('would create thread', thread.id, obj);
 	 	lynxCreate("threads",obj, function(){
-		 console.log("Threads updated");	
+		// console.log("Threads updated");	
 		});
            // }
             // check for new posts
@@ -268,25 +512,25 @@ function fixThumb(th)
   for(var i =0; i<len; i++)
   {
 	var temp = Act.substr(i,1);
-	console.log("TEMP IS: " + temp);
+	//console.log("TEMP IS: " + temp);
 	if("/" == temp && firstSlash == false)
 	{
 	  firstSlash = true;
-	  console.log("thumbnail full is " + Act );
-	  console.log("location of first slash " + Act.substr(0,i));
+	//  console.log("thumbnail full is " + Act );
+	//  console.log("location of first slash " + Act.substr(0,i));
 	  foundSlash = Act.substr(0,i);
 	  
 	}
 	else if("/" == temp && firstSlash == true && secondSlash == false)
 	{
 	   secondSlash = true;
-	   console.log("secondslas? ", secondSlash);
-	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	//   console.log("secondslas? ", secondSlash);
+	//   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
 	   foundSecondSlash = Act.substr(i+1,Act.length - i);
 	   
 	}
   }
-  console.log(foundSlash + "/thumb/t_" + foundSecondSlash);
+ // console.log(foundSlash + "/thumb/t_" + foundSecondSlash);
   var ret = "/" + foundSlash + "/thumb/t_" + foundSecondSlash;
 // var ret = "/thumb/t_"+ foundSecondSlash; 
  return ret;
@@ -305,7 +549,7 @@ function getMime(img)
  	{
 	  foundDot = true;
 	   mimeType = img.substr(i+1,img.length - i);
-	  console.log("found mimeType");	
+	//  console.log("found mimeType");	
 	}
 
  }
@@ -359,7 +603,7 @@ function fixImageUrl(img)
 {
   var len = img.length;
   var Act = img;
-  console.log("Fiximageurl IMG? ",img);
+ // console.log("Fiximageurl IMG? ",img);
   var firstSlash = false;
   var secondSlash = false;
   var foundSlash = "";
@@ -367,25 +611,25 @@ function fixImageUrl(img)
   for(var i =0; i<len; i++)
   {
 	var temp = Act.substr(i,1);
-	console.log("TEMP IS: " + temp);
+	//console.log("TEMP IS: " + temp);
 	if("/" == temp && firstSlash == false)
 	{
 	  firstSlash = true;
-	  console.log("thumbnail full is " + Act );
-	  console.log("location of first slash " + Act.substr(0,i));
+	  //console.log("thumbnail full is " + Act );
+	  //console.log("location of first slash " + Act.substr(0,i));
 	  foundSlash = Act.substr(0,i);
 	  
 	}
 	else if("/" == temp && firstSlash == true && secondSlash == false)
 	{
 	   secondSlash = true;
-	   console.log("secondslas? ", secondSlash);
-	   console.log("location of second slash " + Act.substr(i+1,Act.length - i));
+	 //  console.log("secondslas? ", secondSlash);
+	  // console.log("location of second slash " + Act.substr(i+1,Act.length - i));
 	   foundSecondSlash = Act.substr(i+1,Act.length - i);
 	   
 	}
   }
-  console.log(foundSlash + "/media/" + foundSecondSlash);
+ // console.log(foundSlash + "/media/" + foundSecondSlash);
   var ret = "/" + foundSlash + "/media/" + foundSecondSlash;
 // var ret =  "/media/" + foundSecondSlash; 
  return ret;
@@ -403,6 +647,18 @@ function lynxCreate(table, obj, callback) {
       }
     });
   });
+}
+
+function lynxUpdate(table,threadid,obj, callback){
+  mondb.collection(table, function(err,col){
+	col.update(threadid,{$set:obj},function(){
+	//updating
+		if(callback) {
+		 callback();
+		}
+	});
+	});
+ 
 }
 
 MongoClient.connect(url, function(err, conn) {
@@ -454,6 +710,7 @@ MongoClient.connect(url, function(err, conn) {
 	      console.log(" board should be created. :^( ", board.uri);
             });
 	   boardToLynx(board.uri);
+	   console.log("outside boardToLynx");
 
 	      
        //   } else {
@@ -471,7 +728,7 @@ MongoClient.connect(url, function(err, conn) {
 //Nicked from LynxChan be/engine/gridFsHandler.js
 
 function writeFile(path, dest, mime, meta) {
- console.log("WRITE FILE CALLED!");
+ //console.log("WRITE FILE CALLED!");
   meta.lastModified = new Date();
 
 //  if (verbose) {
@@ -513,4 +770,3 @@ var writeFileOnOpenFile = function(gs, path, destination, meta, mime) {
 
   });
 };
-//=============================END FINE============================
