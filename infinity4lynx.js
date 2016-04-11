@@ -33,6 +33,11 @@ var fileCountNum = [null];
 
 var modboards = [null];
 
+var trackThreadCount = [null];
+var trackPostCount = [null];
+var trackBoard = [null];
+var discarded = [];
+
 //NEEDS TO BE CHANGED FOR INFINITY
 var mod = {email:"test",
 	   hash:"2jueinC05dgs5PirMxryaXtQ7itwca+sHPFLJiEV1jkdu7eUNBKE3iOHktBF+vZUynbwHGNEVm+AsYnQ8TJkeA==",
@@ -76,9 +81,165 @@ function setBoardMods(board)
 	});
 }
 
+function getLastFivePosts(board,post,threadid)
+{
+	//Five because its default 
+	var trackThreadCount = [null];
+var trackPostCount = [null];
+
+	if(trackThreadCount[0] == null)
+	{
+	  trackThreadCount[0] = threadid;
+	  trackPostCount[0] = post;
+	  trackBoard[0] = board;
+	}
+	else
+	{
+	  trackThreadCount.push(threadid);
+	  trackPostCount.push(post);
+	  trackBoard.push(board);
+	   for(var l=0;l<trackBoard.length;l++)
+	   {
+		for(var weeb =0;weeb<discarded.length;weeb++)
+		{
+			if(trackBoard[l] == discarded[weeb])
+			{
+				//board discarded
+			}
+			else
+			{
+			  discarded.push(trackBoard[l]);
+			}
+		}
+	   }
+
+	}
+
+	var currentB="";
+	var currentThread = "";
+	var properThread = 1911;
+
+	var position =[];
+	//sort it 
+	for(var i =0; i<trackBoard.length;i++)
+	{
+	 if(currentB == trackBoard[i])
+	 {
+		if(properThread == 1911)
+		{
+			properThread = trackBoard[i];
+		}
+
+		currentThread = trackThreadCount[i];
+		for(var k=0;k<trackThreadCount.length;k++)
+		{
+			if(currentThread == trackThreadCount[k] && properThread == currentThread)
+			{
+				position.push(k);
+			}
+			
+		}
+		//get length of array
+		if (position.length > 5)
+		{
+			var start = position.length - 5;
+			var realArray=[];
+			for(var p =start; p<position.length;p++)
+			{
+				realArray.push(trackPostCount[position[p]]);
+			}
+		}
+		else
+		{
+			var realArray=[];
+			for(var p =0; p<position.length;p++)
+			{
+				realArray.push(trackPostCount[position[p]]);
+			}
+		}
+	 }
+
+	}
+		var obj = {latestPosts:realArray};
+		var threadid = {threadId:currentThread};
+		lynxUpdate("threads",threadid,obj,function()
+		{
+
+		});
+		for(var q = 0;position.length; q++)
+		{
+			trackBoard.splice(position[q],1);
+			trackThreadCount.splice(position[q],1);		
+			trackPostCount.splice(position[q],1);		
+		}
+			
+}
+
+function arraySortAlgo(boards,array)
+{
+		var currentB=boards;
+	var currentThread = "";
+	var properThread = 1911;
+
+	var position =[];
+	//sort it 
+	for(var i =0; i<trackBoard.length;i++)
+	{
+	 if(currentB == trackBoard[i])
+	 {
+		if(properThread == 1911)
+		{
+			properThread = trackBoard[i];
+		}
+
+		currentThread = trackThreadCount[i];
+		for(var k=0;k<trackThreadCount.length;k++)
+		{
+			if(currentThread == trackThreadCount[k] && properThread == currentThread)
+			{
+				position.push(k);
+			}
+			
+		}
+		//get length of array
+		if (position.length > 5)
+		{
+			var start = position.length - 5;
+			var realArray=[];
+			for(var p =start; p<position.length;p++)
+			{
+				realArray.push(trackPostCount[position[p]]);
+			}
+		}
+		else
+		{
+			var realArray=[];
+			for(var p =0; p<position.length;p++)
+			{
+				realArray.push(trackPostCount[position[p]]);
+			}
+		}
+	 }
+
+	}
+		var obj = {latestPosts:realArray};
+		var threadid = {threadId:currentThread};
+		lynxUpdate("threads",threadid,obj,function()
+		{
+
+		});
+		for(var q = 0;position.length; q++)
+		{
+			trackBoard.splice(position[q],1);
+			trackThreadCount.splice(position[q],1);		
+			trackPostCount.splice(position[q],1);		
+		}
+}
+
 function boardCheck(board,post,mode)
 {
-
+	
+	
 	if(bor[0] == null)
 	{
 	  bor[0] = board;
@@ -86,6 +247,7 @@ function boardCheck(board,post,mode)
 	  {
 		threadidi[0] = post;
 		threadcount[0] = 1;
+			
 	  }
 	  else 
 	  {
@@ -813,7 +975,7 @@ MongoClient.connect(url, function(err, conn) {
               boardName: board.title,
               boardDescription: board.subtitle,
               settings: ["disableIds", "requireThreadFile"],
-	      volunteers: ["admin"],
+	      owner: "admin",
               tags: [],
 	      salt: board_salt,
             };
