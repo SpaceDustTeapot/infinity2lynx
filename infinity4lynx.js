@@ -81,6 +81,112 @@ function setBoardMods(board)
 	});
 }
 
+
+function getBanList()
+{
+	 connection.query('SELECT * from bans', function(err, bans) {
+		for(var i in bans)
+		{
+			var ban = bans[i];
+			if(!ban)
+			{
+			
+			}
+			else
+			{
+
+				//Ban creater is the ID of the admin in vichan DB
+				//expires is NULL in the DB
+				if(ban.expires == null)
+				{
+					var expdate = null;
+				}
+				else
+				{
+					var expdate = new Date(ban.expires*1000);
+				}
+				var banObj = {
+						_id:ban.id,
+						appliedBy:ban.creator, //?
+						//turns out Bans are forever :^)						
+						//expiration: new Date(ban.expires*1000),
+						//expiration: expdate,
+						boardUri:ban.board,
+						//test
+						//boardUri:'s',
+						reason:ban.reason,
+						//RANGE array Ban :^)						
+						range:null,
+						denied:ban.seen,
+						ip:ban.ipstart
+					    };
+				console.log(banObj);
+				var blob = parseInt(banObj.ip[0]);
+				var ipArray=[];
+				
+				//create IP array
+				for(var i =0;i<4;i++)
+				{
+				  ipArray.push(banObj.ip[i]);
+				}
+				for(var i =0;i<4;i++)
+				{
+				  console.log(parseInt(ipArray[i]));
+				}
+				//console.log(blob);
+				banObj.ip = ipArray;
+
+				lynxCreate('bans', banObj, function()
+				{
+					
+				});
+			}
+		}
+	
+	});
+}
+
+function moveStaffLog()
+{
+	connection.query('SELECT * from modlogs', function(err, logs) {
+		for(var i in logs)
+		{
+			var logz = logs[i];
+			if(!logz)
+			{
+
+			}
+			else
+			{
+				var logObj = 
+				{
+					user:"admin",
+					type:"boardTransfer",
+					time: new date(logz.time*1000),
+					boardUri:logz.board,
+					description:logz.text,
+					global:0
+				};
+				if(logz.ip == "::1")
+				{
+				  logObj.global = 1;
+				}
+
+				lynxCreate('staffLogs', logObj, function()
+				{
+					
+				});
+
+
+
+			}
+		}
+
+
+	});
+}
+
+
 function getLastFivePosts(board,post,threadid)
 {
 	//Five because its default 
@@ -998,6 +1104,7 @@ MongoClient.connect(url, function(err, conn) {
     });
   });
  console.log("AT END OF IMPORT");
+ getBanList();
   setMod();
 });
 
