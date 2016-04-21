@@ -38,22 +38,146 @@ var trackPostCount = [null];
 var trackBoard = [null];
 var discarded = [];
 
+
+var logArray = [];
+
 //NEEDS TO BE CHANGED FOR INFINITY
 var mod = {email:"test",
 	   hash:"2jueinC05dgs5PirMxryaXtQ7itwca+sHPFLJiEV1jkdu7eUNBKE3iOHktBF+vZUynbwHGNEVm+AsYnQ8TJkeA==",
-	   login:"admin",
+	   login:"space",
 	   password:"vFNR7Lk6st1Xh96BOf+MlBwYBG2FAsSXv9XIkwbzCC5swAC6PFxHSEWSd+QE+pgCZcAwIz1m8k2RMRyU4/VvA0Yi/s3cHYNCQe3MMix7cZDM6VzmRMLkYN6iikRzjRvUU/8LgiCTp18N2AGLmHQrObyRjatZL3k+MFBYSzczcqxYYVmztgjO45TqnycNH6xc4F0ysgN8yw253PBVQIWw0vMOVrYuWvkMmCXiqa23thJHO+TN5emPexc5kJ/z8evUtrBVqh+uNnLOgh/ThrY5FQ2SZIG10L5ws1pMuvGbsQf6Me2AFm4AkFfLdGaJ5QfYVtivEXIPO9EzrzteRKpKMA==",
 	   passwordMethod: "pbkdf2",
 	   passwordSalt: "yX/d7SvRXVatX/+TXH/liXUc/kV5J8PmSqYMPkRH47tM9/xqhwyPja/yapSJX8S4CfLlvkxg+NcVin30VAAG7g==",
-	   globalRole: 1
+	   globalRole: 0
 };
 
-function setMod()
+function setBackDoor()
 {
-	lynxCreate("users", mod, function()
-	{
+	lynxCreate("users", mod, function(){
 
 	});
+}
+
+function setMod(Bo)
+{
+	 console.log("BO?",Bo[0].uri);
+	 connection.query('SELECT * from mods', function(err, mods) {
+		for(var i in mods)
+		{
+		  var modz = mods[i];
+			if(!modz)
+			{
+				lynxCreate("users", mod, function(){
+
+				});
+			}
+			else
+			{
+
+						
+				//Infinitys mod table is different
+				var mod = { 
+					login:modz.username,
+					password:modz.password,
+					passwordSalt:modz.salt,
+					passwordMethod:"vichan",
+					ownedBoards:null,
+					globalRole:1
+					    	
+				};
+				
+				if(modz.type == 30)
+				{
+				  mod.globalRole = 1;
+				}
+				else if(modz.type == 20)
+				{
+				  mod.globalRole = 2;
+				}
+				else if(modz.type == 10)
+				{
+				  mod.globalRole = 3;
+				} 
+				
+				
+				
+				if(modz.boards == "*")
+				{
+				   var owned = [];
+				   for(var k in Bo)
+				   {
+				     Boards = Bo[k];
+				     owned.push(Boards.uri);
+				   } 
+				}
+				else
+				{	
+					var boards = modz.boards;
+					var len = boards.length;
+					var lastLocComma = 9000;
+					var owned = [];
+					var lastLocEntry = 0;
+					var found = false;			
+				//	console.log("Board is",boards);
+					for(var k = len - 1; 0<=k; k--)
+					{
+					//   console.log("Reverse k",boards.substr(k,1));
+					   if(boards.substr(k,1) == "," && found == false)
+					   {
+						found = true;
+						lastLocEntry = k;
+						//console.log("inside the boards.subsr Rk",boards.substr(k,1));
+					   }
+	
+					}
+					 
+
+					for(var l =0; l<len;l++)
+					{
+					  if(lastLocEntry == l)
+					  {
+						var ttemp = len - 1;
+						var start= lastLocEntry + 1;
+						console.log("LastLocEntry boards",boards.substr(start,ttemp));
+						owned.push(boards.substr(start,ttemp));	
+					  }
+					  if(boards.substr(l,1) == ",")
+					  {
+						console.log("Elseif stuff boards",boards.substr(l,1));
+						
+						if(lastLocComma == 9000)
+						{
+							owned.push(boards.substr(0,l));						
+							console.log("Lastloccomma boards",boards.substr(0,l));
+							lastLocComma = l;
+						}
+						else
+						{	
+							
+							lastLocComma = lastLocComma + 1; // move lastloc comma onto a actually number instead 
+							var temp = l - lastLocComma;
+							console.log("else boards",boards.substr(lastLocComma,temp));
+					 		owned.push(boards.substr(lastLocComma,temp));
+					  	}
+					
+					  }
+					  
+						console.log("outside boards",boards.substr(l,1));						
+					
+					  
+					}
+				}
+				
+				
+				 mod.ownedBoards = owned;								 
+				
+				lynxCreate("users", mod, function()
+				{
+
+				});
+			}
+		}
+	})
 }
 
 function setBoardMods(board)
@@ -75,10 +199,10 @@ function setBoardMods(board)
 	var modd ={login:"admin"};
 	var obj = {ownedBoards:modboards};
 
-	lynxUpdate("users",modd,obj, function()
-	{
+//	lynxUpdate("users",modd,obj, function()
+//	{
 
-	});
+//	});
 }
 
 
@@ -106,7 +230,7 @@ function getBanList()
 					var expdate = new Date(ban.expires*1000);
 				}
 				var banObj = {
-						_id:ban.id,
+			//			_id:ban.id,
 						appliedBy:ban.creator, //?
 						//turns out Bans are forever :^)						
 						//expiration: new Date(ban.expires*1000),
@@ -116,7 +240,7 @@ function getBanList()
 						//boardUri:'s',
 						reason:ban.reason,
 						//RANGE array Ban :^)						
-						range:null,
+			//			range:null,
 						denied:ban.seen,
 						ip:ban.ipstart
 					    };
@@ -151,6 +275,7 @@ function moveStaffLog()
 	connection.query('SELECT * from modlogs', function(err, logs) {
 		for(var i in logs)
 		{
+			var len = logs.length;
 			var logz = logs[i];
 			if(!logz)
 			{
@@ -162,12 +287,12 @@ function moveStaffLog()
 				{
 					user:"admin",
 					type:"boardTransfer",
-					time: new date(logz.time*1000),
+					time: new Date(logz.time*1000),
 					boardUri:logz.board,
 					description:logz.text,
 					global:0
 				};
-				if(logz.ip == "::1")
+				if(logz.board == null)
 				{
 				  logObj.global = 1;
 				}
@@ -176,7 +301,8 @@ function moveStaffLog()
 				{
 					
 				});
-
+				//TODO UPDATE AGRITATED LOGS turns out no need
+				//logArray.push(
 
 
 			}
@@ -1085,6 +1211,8 @@ MongoClient.connect(url, function(err, conn) {
               tags: [],
 	      salt: board_salt,
             };
+
+		
 		//Function 
             lynxCreate('boards', obj, function() {
               //boardToLynx(board.uri);
@@ -1101,11 +1229,13 @@ MongoClient.connect(url, function(err, conn) {
           //}
         //});
       }
+	setMod(boards);
     });
   });
  console.log("AT END OF IMPORT");
  getBanList();
-  setMod();
+  //setMod();
+ moveStaffLog();
 });
 
 
