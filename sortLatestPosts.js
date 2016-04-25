@@ -11,7 +11,7 @@ var connection = mysql.createConnection({
   host     : 'localhost',
   user     : 'spacedust',
   password : 'niceone',
-  database : 'vichan'
+  database : 'vichan2'
 });
 var url = 'mongodb://localhost:27017/lynxchan';
 
@@ -165,12 +165,16 @@ MongoClient.connect(url, function(err, conn) {
 			latestPosts:Lastposts
 		};
 			var setObj = {
-				threadId:thred[0].thread
+				threadId:thred[0].thread,
+				boardUri:thred[0].email
 			};
 		console.log("Objs");
 		console.log("Thread");
 		console.log(thredObj);
 		console.log(setObj);
+
+		 lynxUpdate("threads",setObj,thredObj, function(){
+		});
 
 				
 		}

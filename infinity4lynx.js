@@ -933,7 +933,7 @@ function repliesToLynx(uri, thread, callback) {
              // console.log('would create', uri+'/'+thread.id+'/'+reply.id, obj);
 		lynxCreate('posts', obj, function() {
       //          boardToLynx(uri);
-			sortPostCount(gloBoards,0,0,null);
+		//	sortPostCount(gloBoards,0,0,null);
             });
 	     console.log("at end of replies2lynx");
 	     console.log("K is?",k);
