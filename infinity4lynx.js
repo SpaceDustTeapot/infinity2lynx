@@ -14,11 +14,15 @@ var connection = mysql.createConnection({
 });
 var url = 'mongodb://localhost:27017/lynxchan';
 
-var lynxModName = "";
+//Write your login user name of who owns the instance of lynxchan
+var lynxModName = "spacedust";
 //var board[];
+
 
 // setup
 var mondb=null;
+
+var gloBoards;
 
 var state = {board:null, postid:0,threadid:0};
 var bor = [null];
@@ -60,6 +64,8 @@ function setBackDoor()
 
 function setMod(Bo)
 {
+	 var astFlag = false;
+	 var astCount = 0;
 	 console.log("BO?",Bo[0].uri);
 	 connection.query('SELECT * from mods', function(err, mods) {
 		for(var i in mods)
@@ -82,7 +88,8 @@ function setMod(Bo)
 					passwordSalt:modz.salt,
 					passwordMethod:"vichan",
 					ownedBoards:null,
-					globalRole:1
+					globalRole:1,
+					volunteeredBoards:null
 					    	
 				};
 				
@@ -104,11 +111,43 @@ function setMod(Bo)
 				if(modz.boards == "*")
 				{
 				   var owned = [];
+				   //first pass check for anyaccounts that own *
+				 if(astFlag == false)
+				{
+				   for(var l in mods)
+				   {
+					if(mods[l].boards == "*")
+					{
+					     if(mods[l].type == 30)
+					       {
+						astFlag = true;
+						astCount = astCount + 1;
+					       }					
+					}
+				   }
+				}
 				   for(var k in Bo)
 				   {
 				     Boards = Bo[k];
 				     owned.push(Boards.uri);
-				   } 
+				   }
+				  if(astCount > 1)
+				  {
+					if(mod.login == lynxModName)
+					{
+					 mod.ownedBoards = owned;
+					}
+				  	else
+				  	{
+						mod.volunteeredBoards = owned;
+				  	}
+				  }
+				  else
+				  {
+				   mod.ownedBoards = owned;
+				  }
+
+ 
 				}
 				else
 				{	
@@ -168,9 +207,16 @@ function setMod(Bo)
 					}
 				}
 				
-				
-				 mod.ownedBoards = owned;								 
-				
+				if(modz.boards == "*")
+				{
+				//already sorted
+				}
+				else
+				{
+					 mod.volunteeredBoards = owned;								 
+				}
+
+
 				lynxCreate("users", mod, function()
 				{
 
@@ -182,6 +228,8 @@ function setMod(Bo)
 
 function setBoardMods(board)
 {
+//Depricated
+
 	if(modboards[0] == null)
 	{
 	  modboards[0] = board;
@@ -196,7 +244,8 @@ function setBoardMods(board)
 	 console.log("board that now belong to admin: ",modboards[i]);
 	} */
 
-	var modd ={login:"admin"};
+	//var modd ={login:"admin"};
+	var modd = {login:lynxModName};
 	var obj = {ownedBoards:modboards};
 
 //	lynxUpdate("users",modd,obj, function()
@@ -231,7 +280,8 @@ function getBanList()
 				}
 				var banObj = {
 			//			_id:ban.id,
-						appliedBy:ban.creator, //?
+						//appliedBy:ban.creator, //?
+						appliedBy:lynxModName,						
 						//turns out Bans are forever :^)						
 						//expiration: new Date(ban.expires*1000),
 						//expiration: expdate,
@@ -883,6 +933,7 @@ function repliesToLynx(uri, thread, callback) {
              // console.log('would create', uri+'/'+thread.id+'/'+reply.id, obj);
 		lynxCreate('posts', obj, function() {
       //          boardToLynx(uri);
+			sortPostCount(gloBoards,0,0,null);
             });
 	     console.log("at end of replies2lynx");
 	     console.log("K is?",k);
@@ -1190,6 +1241,7 @@ MongoClient.connect(url, function(err, conn) {
 	 for(var i in boards) {
 	//console.log("i is:", i);
         var board=boards[i];
+	gloBoards=boards;
 	setBoardMods(board.uri);
 	//console.log("BOARD IS?",board.uri);
         // does board exit
@@ -1207,7 +1259,7 @@ MongoClient.connect(url, function(err, conn) {
               boardName: board.title,
               boardDescription: board.subtitle,
               settings: ["disableIds", "requireThreadFile"],
-	      owner: "admin",
+	      owner: lynxModName,
               tags: [],
 	      salt: board_salt,
             };
@@ -1230,6 +1282,8 @@ MongoClient.connect(url, function(err, conn) {
         //});
       }
 	setMod(boards);
+	//sort post count
+//	sortPostCount(boards,null,null,null);
     });
   });
  console.log("AT END OF IMPORT");
@@ -1237,6 +1291,147 @@ MongoClient.connect(url, function(err, conn) {
   //setMod();
  moveStaffLog();
 });
+
+function sortPostCount(board,ID,currthread,currBoard)
+{
+	console.log("sortPost Count");
+	//get board length
+	var len = board.length;
+	if(currBoard == null)
+	{
+	 currBoard = board[0].uri;
+	}
+	else 
+	{
+		//simple check
+		for(var i in board)
+		{
+			if(currBoard == board[i].uri)
+			{
+			
+			}
+			else
+			{
+			 return;
+			}
+		}
+	}
+	//get current thread
+	 connection.query('SELECT * from posts_' +currBoard+'where thread is null' , function(err, threads) {
+	
+	console.log("in Query");
+	
+	  if(!threads)
+	   {
+		console.log("No Thread", currBoard);
+		var flag = false;
+		for(var lel in board)
+		{
+		  if(board[lel] == currBoard)
+		  {
+			var kek =0;
+			kek = lel + 1;
+			if(kek < board.length && flag == false )
+			{
+				currBoard = board[kek].uri;
+				flag = true;
+			}
+			else
+			{
+				return;
+			}
+			console.log(board.length);
+		  }
+		}
+		sortPostCount(board,1,0,currBoard);
+		
+	   }
+	   else
+	   {
+
+		console.log("Threads exist",currBoard);
+	 	 for(var k in threads)
+	 	 {
+		 sortingPost(threads[k].thread,currBoard);
+	  	 }
+
+		var flag = false;
+		for(var lel in board)
+		{
+		  if(board[lel] == currBoard)
+		  {
+			var kek =0;
+			kek = lel + 1;
+			if(kek < board.length && flag == false )
+			{
+				currBoard = board[kek].uri;
+				flag = true;
+			}
+			else
+			{
+				return;
+			}
+		  }
+		}
+		sortPostCount(board,0,0,currBoard);		
+	   }
+
+	});
+
+}
+
+function sortingPost(Thread,board)
+{
+	connection.query('SELECT * from posts_'+board+'Where thread='+Thread, function(err, thred){
+		
+		if(!thred)
+		{
+			var postcount = 0;
+			var Lastposts = [];
+		}
+		else
+		{
+			var postcount = thred.length;
+			var Lastposts = [];
+			var lastFive = thred[k] - 5;
+			for(var k=0;k<thred.length;k++)
+			{
+				if(thred[k] > 5)
+				{
+
+					if(k>5 && k>= lastFive)
+					{
+					 Lastposts.push(thred[k].id);
+
+					}
+				}
+				else
+				{
+					Lastposts.push(thred[k].id);
+				}
+
+			}
+
+		}
+
+		var thredObj = {
+			postCount:postcount,
+			latestPosts:Lastposts
+		};
+			var setObj = {
+				threadId:Thread
+			};
+		console.log("Objs");
+		console.log("Thread");
+		console.log(threadObj);
+		console.log(setObj);
+
+		 lynxUpdate("threads",setObj,thredObj, function(){
+		});
+
+ 
+	});
+}
 
 
 //Nicked from LynxChan be/engine/gridFsHandler.js
