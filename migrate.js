@@ -3,17 +3,10 @@
 var mongo = require('mongodb');
 var connection = require('./mysqlDb').connection;
 var crypto = require('crypto');
+var users = require('./mongoDb').users();
 var mondb = require('./mongoDb').conn();
 var boardPath;
 var lynxModName;
-
-var gloBoards;
-
-var state = {
-  board : null,
-  postid : 0,
-  threadid : 0
-};
 
 var bor = [ null ];
 var postidi = [ null ];
@@ -24,8 +17,6 @@ var fileBor = [ null ];
 var fileThreadid = [ null ];
 var fileCountNum = [ null ];
 
-var modboards = [ null ];
-
 var trackThreadCount = [ null ];
 var trackPostCount = [ null ];
 var trackBoard = [ null ];
@@ -33,137 +24,38 @@ var discarded = [];
 
 var logArray = [];
 
-function setMod(Bo) {
-  var astFlag = false;
-  var astCount = 0;
+function migrateMod(modz, Bo) {
 
-  connection.query('SELECT * from mods', function(err, mods) {
-    for ( var i in mods) {
-      var modz = mods[i];
-      if (!modz) {
-        lynxCreate('users', mod);
-      } else {
+  var mod = {
+    login : modz.username,
+    password : modz.password,
+    passwordSalt : modz.salt,
+    passwordMethod : 'vichan',
+    ownedBoards : [],
+    volunteeredBoards : null
 
-        // Infinitys mod table is different
-        var mod = {
-          login : modz.username,
-          password : modz.password,
-          passwordSalt : modz.salt,
-          passwordMethod : 'vichan',
-          ownedBoards : null,
-          globalRole : 1,
-          volunteeredBoards : null
+  };
 
-        };
-
-        if (modz.type === 30) {
-          mod.globalRole = 1;
-        } else if (modz.type === 20) {
-          mod.globalRole = 2;
-        } else if (modz.type === 10) {
-          mod.globalRole = 3;
-        }
-
-        if (modz.boards === '*') {
-          var owned = [];
-
-          if (astFlag === false) {
-            for ( var l in mods) {
-              if (mods[l].boards === '*') {
-                if (mods[l].type === 30) {
-                  astFlag = true;
-                  astCount = astCount + 1;
-                }
-              }
-            }
-          }
-
-          for ( var k in Bo) {
-            var Boards = Bo[k];
-            owned.push(Boards.uri);
-          }
-          if (astCount > 1) {
-            if (mod.login === lynxModName) {
-              mod.ownedBoards = owned;
-            } else {
-              mod.volunteeredBoards = owned;
-            }
-          } else {
-            mod.ownedBoards = owned;
-          }
-
-        } else {
-
-          var boards = modz.boards;
-          var len = boards.length;
-          var lastLocComma = 9000;
-          owned = [];
-          var lastLocEntry = 0;
-          var found = false;
-
-          for (k = len - 1; 0 <= k; k--) {
-
-            if (boards.substr(k, 1) === ',' && found === false) {
-              found = true;
-              lastLocEntry = k;
-
-            }
-
-          }
-
-          for (l = 0; l < len; l++) {
-            if (lastLocEntry === l) {
-              var ttemp = len - 1;
-              var start = lastLocEntry + 1;
-
-              owned.push(boards.substr(start, ttemp));
-            }
-            if (boards.substr(l, 1) === ',') {
-
-              if (lastLocComma === 9000) {
-                owned.push(boards.substr(0, l));
-
-                lastLocComma = l;
-              } else {
-
-                lastLocComma = lastLocComma + 1; // move lastloc comma onto a
-                // actually number instead
-                var temp = l - lastLocComma;
-
-                owned.push(boards.substr(lastLocComma, temp));
-              }
-
-            }
-
-          }
-        }
-
-        if (modz.boards !== '*') {
-          mod.volunteeredBoards = owned;
-        }
-
-        lynxCreate('users', mod);
-      }
-    }
-  });
-}
-
-function setBoardMods(board) {
-  // Depricated
-
-  if (modboards[0] === null) {
-    modboards[0] = board;
+  if (modz.type === 30) {
+    mod.globalRole = 1;
+  } else if (modz.type === 20) {
+    mod.globalRole = 2;
   } else {
-    modboards.push(board);
+    mod.globalRole = 3;
   }
 
-  var modd = {
-    login : lynxModName
-  };
-  var obj = {
-    ownedBoards : modboards
-  };
+  lynxCreate('users', mod);
 
+}
+
+function setMod(Bo) {
+
+  connection.query('SELECT * from mods', function(err, mods) {
+
+    for (var i = 0; i < mods.length; i++) {
+      migrateMod(mods[i], Bo);
+    }
+  });
 }
 
 function getBanList() {
@@ -251,6 +143,7 @@ function getLastFivePosts(board, post, threadid) {
     trackThreadCount.push(threadid);
     trackPostCount.push(post);
     trackBoard.push(board);
+
     for (var l = 0; l < trackBoard.length; l++) {
       for (var weeb = 0; weeb < discarded.length; weeb++) {
 
@@ -693,6 +586,15 @@ function findPostcount(uri, reply, threadid) {
 }
 
 function boardToLynx(uri) {
+
+  users.updateOne({
+    login : lynxModName
+  }, {
+    $push : {
+      ownedBoards : uri
+    }
+  });
+
   // get a list of threads
   connection.query('SELECT * from posts_' + uri + ' where thread IS NULL',
       function(err, threads) {
@@ -887,11 +789,11 @@ exports.init = function(modName, path) {
 
   connection.query('SELECT * from boards', function(err, boards) {
 
-    for ( var i in boards) {
+    for (var i = 0; i < boards.length; i++) {
 
       var board = boards[i];
-      gloBoards = boards;
-      setBoardMods(board.uri);
+
+      console.log('Migrating /' + board.uri + '/');
 
       var board_salt = crypto.createHash('sha256').update(
           'gunshot gunshot Cash registernoise' + Math.random() + new Date())
@@ -904,7 +806,7 @@ exports.init = function(modName, path) {
         settings : [ 'disableIds', 'requireThreadFile' ],
         owner : lynxModName,
         tags : [],
-        salt : board_salt,
+        salt : board_salt
       };
 
       lynxCreate('boards', obj);
@@ -971,7 +873,6 @@ function sortPostCount(board, ID, currthread, currBoard) {
 
           var flag = false;
 
-          //
           for ( var lel in board) {
             if (board[lel] === currBoard) {
               var kek = 0;

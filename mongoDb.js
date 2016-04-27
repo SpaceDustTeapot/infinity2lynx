@@ -1,12 +1,11 @@
 'use strict';
 
+var fs = require('fs');
 var mongo = require('mongodb');
-
 var readline = require('readline');
-
 var rl;
-
 var cachedDb;
+var lastInformedPath = __dirname + '/lastMongoData.json';
 
 var indexesSet;
 var maxIndexesSet = 18;
@@ -581,6 +580,8 @@ function initCollections(callback) {
 
 function connect(dbSettings, callback) {
 
+  rl.close();
+
   if (loading) {
     callback('Already booting db');
   }
@@ -628,7 +629,7 @@ function askDbPassword(info, callback) {
           info.password = answer;
         }
 
-        rl.close();
+        fs.writeFileSync(lastInformedPath, JSON.stringify(info, null, 2));
 
         connect(info, callback);
 
@@ -687,20 +688,43 @@ function askDbPort(info, callback) {
 
 }
 
-exports.init = function(callback) {
+function askAddress(callback) {
+
   var info = {};
+
+  rl.question('Inform the address of LynxChan database: ',
+      function read(answer) {
+
+        info.address = answer.trim();
+        askDbPort(info, callback);
+
+      });
+}
+
+exports.init = function(callback) {
 
   rl = readline.createInterface({
     input : process.stdin,
     output : process.stdout
   });
 
-  rl.question('Inform the address of LynxChan database: ',
-      function read(answer) {
+  try {
 
-        info.address = answer.trim();
+    var parsedLastData = JSON.parse(fs.readFileSync(lastInformedPath));
 
-        askDbPort(info, callback);
+    rl.question('Do you wish to reuse the mongo information? (y/n): ',
+        function read(answer) {
 
-      });
+          if (answer.trim().toLowerCase() === 'y') {
+            connect(parsedLastData, callback);
+          } else {
+            askAddress(callback);
+          }
+
+        });
+
+  } catch (error) {
+    askAddress(callback);
+  }
+
 };

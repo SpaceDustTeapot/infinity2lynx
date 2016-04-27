@@ -20,8 +20,12 @@ function getDirectory(user) {
 
     answer = answer.trim();
 
+    if (answer.substring(answer.length - 1) !== '/') {
+      answer = answer + '/';
+    }
+
     try {
-      if (!fs.lstatSync(answer)) {
+      if (!fs.lstatSync(answer).isDirectory()) {
         throw 'Not a directory';
       }
 
@@ -46,7 +50,7 @@ function getUser() {
     output : process.stdout
   });
 
-  var question = 'What LynxChan user should own boards?: ';
+  var question = 'Which LynxChan user should own the boards?: ';
   var msg = 'User not found. See src/be/readme to see how to create users.';
 
   rl.question(question, function read(answer) {

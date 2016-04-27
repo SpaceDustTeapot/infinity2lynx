@@ -1,10 +1,13 @@
 'use strict';
 
+var fs = require('fs');
+var lastInformedPath = __dirname + '/lastVichanData.json';
 var readline = require('readline');
-
 var rl;
 
 function connect(info, callback) {
+
+  rl.close();
 
   exports.connection = require('mysql').createConnection(info);
 
@@ -20,7 +23,7 @@ function askDbPassword(info, callback) {
 
     info.password = answer;
 
-    rl.close();
+    fs.writeFileSync(lastInformedPath, JSON.stringify(info, null, 2));
 
     connect(info, callback);
 
@@ -65,13 +68,9 @@ function askDbPort(info, callback) {
 
 }
 
-exports.init = function(callback) {
-  var info = {};
+function askAddress(callback) {
 
-  rl = readline.createInterface({
-    input : process.stdin,
-    output : process.stdout
-  });
+  var info = {};
 
   rl.question('Inform the address of Vichan database: ', function read(answer) {
 
@@ -80,4 +79,33 @@ exports.init = function(callback) {
     askDbPort(info, callback);
 
   });
+
+}
+
+exports.init = function(callback) {
+
+  rl = readline.createInterface({
+    input : process.stdin,
+    output : process.stdout
+  });
+
+  try {
+
+    var parsedLastData = JSON.parse(fs.readFileSync(lastInformedPath));
+
+    rl.question('Do you wish to reuse the Vichan information? (y/n): ',
+        function read(answer) {
+
+          if (answer.trim().toLowerCase() === 'y') {
+            connect(parsedLastData, callback);
+          } else {
+            askAddress(callback);
+          }
+
+        });
+
+  } catch (error) {
+    askAddress(callback);
+  }
+
 };
