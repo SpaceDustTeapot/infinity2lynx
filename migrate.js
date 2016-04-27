@@ -1,62 +1,77 @@
 'use strict';
 
+var mongoHandler = require('./mongoDb');
 var mongo = require('mongodb');
 var connection = require('./mysqlDb').connection;
 var crypto = require('crypto');
-var users = require('./mongoDb').users();
-var mondb = require('./mongoDb').conn();
+var users = mongoHandler.users();
+var threads = mongoHandler.threads();
+var mondb = mongoHandler.conn();
+var posts = mongoHandler.posts();
+var boards = mongoHandler.boards();
 var boardPath;
 var lynxModName;
 
-var bor = [ null ];
-var postidi = [ null ];
-var threadidi = [ null ];
-var threadcount = [ null ];
+// Mod migration {
+function migrateMod(foundMod, callback) {
 
-var fileBor = [ null ];
-var fileThreadid = [ null ];
-var fileCountNum = [ null ];
-
-var trackThreadCount = [ null ];
-var trackPostCount = [ null ];
-var trackBoard = [ null ];
-var discarded = [];
-
-var logArray = [];
-
-function migrateMod(modz, Bo) {
+  console.log('Migrating mod ' + foundMod.username);
 
   var mod = {
-    login : modz.username,
-    password : modz.password,
-    passwordSalt : modz.salt,
+    login : foundMod.username,
+    password : foundMod.password,
+    passwordSalt : foundMod.salt,
     passwordMethod : 'vichan',
     ownedBoards : [],
     volunteeredBoards : null
 
   };
 
-  if (modz.type === 30) {
+  switch (foundMod.type) {
+  case 30:
     mod.globalRole = 1;
-  } else if (modz.type === 20) {
+    break;
+  case 20:
     mod.globalRole = 2;
-  } else {
+    break;
+  default:
     mod.globalRole = 3;
   }
 
-  lynxCreate('users', mod);
+  users.insertOne(mod, callback);
 
 }
 
-function setMod(Bo) {
+function iterateMods(foundMods, callback, index) {
 
-  connection.query('SELECT * from mods', function(err, mods) {
+  index = index || 0;
 
-    for (var i = 0; i < mods.length; i++) {
-      migrateMod(mods[i], Bo);
+  if (index >= foundMods.length) {
+    callback();
+    return;
+
+  }
+
+  migrateMod(foundMods[index], function migratedMod(error) {
+
+    if (error && error.code !== 11000) {
+      callback(error);
+    } else {
+      iterateMods(foundMods, callback, ++index);
     }
+
   });
 }
+
+function migrateMods(callback) {
+
+  connection.query('SELECT * from mods', function(err, foundMods) {
+    iterateMods(foundMods, callback);
+  });
+
+}
+
+// } Mod migration
 
 function getBanList() {
 
@@ -129,305 +144,10 @@ function moveStaffLog() {
 
 }
 
-function getLastFivePosts(board, post, threadid) {
+function buildFiles(uri, thread, threadid) {
 
-  // Five because its default
-  var trackThreadCount = [ null ];
-  var trackPostCount = [ null ];
-
-  if (trackThreadCount[0] === null) {
-    trackThreadCount[0] = threadid;
-    trackPostCount[0] = post;
-    trackBoard[0] = board;
-  } else {
-    trackThreadCount.push(threadid);
-    trackPostCount.push(post);
-    trackBoard.push(board);
-
-    for (var l = 0; l < trackBoard.length; l++) {
-      for (var weeb = 0; weeb < discarded.length; weeb++) {
-
-        if (trackBoard[l] !== discarded[weeb]) {
-          discarded.push(trackBoard[l]);
-        }
-
-      }
-    }
-
-  }
-
-  var currentB = '';
-  var currentThread = '';
-  var properThread = 1911;
-
-  var position = [];
-  // sort it
-  for (var i = 0; i < trackBoard.length; i++) {
-    if (currentB === trackBoard[i]) {
-      if (properThread === 1911) {
-        properThread = trackBoard[i];
-      }
-
-      currentThread = trackThreadCount[i];
-      for (var k = 0; k < trackThreadCount.length; k++) {
-        if (currentThread === trackThreadCount[k]
-            && properThread === currentThread) {
-          position.push(k);
-        }
-
-      }
-      // get length of array
-      if (position.length > 5) {
-        var start = position.length - 5;
-        var realArray = [];
-        for (var p = start; p < position.length; p++) {
-          realArray.push(trackPostCount[position[p]]);
-        }
-      } else {
-        realArray = [];
-        for (p = 0; p < position.length; p++) {
-          realArray.push(trackPostCount[position[p]]);
-        }
-      }
-    }
-
-  }
-  var obj = {
-    latestPosts : realArray
-  };
-  threadid = {
-    threadId : currentThread
-  };
-  lynxUpdate('threads', threadid, obj, function() {
-
-  });
-  for (var q = 0; position.length; q++) {
-    trackBoard.splice(position[q], 1);
-    trackThreadCount.splice(position[q], 1);
-    trackPostCount.splice(position[q], 1);
-  }
-
-}
-
-function arraySortAlgo(boards, array) {
-  var currentB = boards;
-  var currentThread = '';
-  var properThread = 1911;
-
-  var position = [];
-
-  for (var i = 0; i < trackBoard.length; i++) {
-    if (currentB === trackBoard[i]) {
-      if (properThread === 1911) {
-        properThread = trackBoard[i];
-      }
-
-      currentThread = trackThreadCount[i];
-      for (var k = 0; k < trackThreadCount.length; k++) {
-        if (currentThread === trackThreadCount[k]
-            && properThread === currentThread) {
-          position.push(k);
-        }
-
-      }
-
-      if (position.length > 5) {
-
-        var start = position.length - 5;
-        var realArray = [];
-        for (var p = start; p < position.length; p++) {
-          realArray.push(trackPostCount[position[p]]);
-        }
-
-      } else {
-
-        realArray = [];
-
-        for (p = 0; p < position.length; p++) {
-          realArray.push(trackPostCount[position[p]]);
-        }
-      }
-    }
-
-  }
-  var obj = {
-    latestPosts : realArray
-  };
-  var threadid = {
-    threadId : currentThread
-  };
-  lynxUpdate('threads', threadid, obj, function() {
-
-  });
-  for (var q = 0; position.length; q++) {
-    trackBoard.splice(position[q], 1);
-    trackThreadCount.splice(position[q], 1);
-    trackPostCount.splice(position[q], 1);
-  }
-}
-
-function boardCheck(board, post, mode) {
-
-  if (bor[0] === null) {
-    bor[0] = board;
-    if (mode === 1) {
-      threadidi[0] = post;
-      threadcount[0] = 1;
-
-    } else {
-      postidi[0] = post;
-    }
-  } else {
-    var len = bor.length;
-    var foundBoard = false;
-    for (var i = 0; i < len; i++) {
-      if (board === bor[i]) {
-        var foundi = i;
-        foundBoard = true;
-      }
-
-      if (foundBoard === true) {
-        if (mode === 1) {
-
-          threadidi[i] = post;
-          threadcount[i] = threadcount[i] + 1;
-
-        } else {
-
-          postidi[i] = post;
-        }
-      }
-    }
-
-    if (foundBoard === false) {
-      bor.push(board);
-      threadidi.push(1911);
-      threadcount.push(0);
-      postidi.push(777);
-      len = bor.length;
-
-      foundBoard = false;
-
-      for (i = 0; i < len; i++) {
-        if (board === bor[i]) {
-          foundi = i;
-          foundBoard = true;
-        }
-
-        if (foundBoard === true) {
-          if (mode === 1) {
-
-            threadidi[i] = post;
-            threadcount[i] = threadcount[i] + 1;
-          } else {
-
-            postidi[i] = post;
-          }
-        }
-      }
-    }
-
-  }
-
-  if (postidi[len - 1] === postidi[len - 2]) {
-    postidi[len - 1] = '777';
-  }
-
-  var checkarry = [];
-
-  for (var k = 0; k < len; k++) {
-    if (k === 0) {
-    } else {
-
-      if (postidi[k] === postidi[k - 1]) {
-        checkarry.push(k);
-      }
-    }
-
-  }
-
-  for (var l = 0; l < checkarry.length; l++) {
-    postidi[checkarry[l]] = '777';
-  }
-
-  for (var p = 0; p < len; p++) {
-    var bo = {
-      boardUri : bor[p]
-    };
-    if (threadidi[p] > postidi[p]) {
-      var obj = {
-        lastPostId : threadidi[p],
-        threadCount : threadcount[p]
-      };
-    } else if (postidi[p] === '777') {
-      obj = {
-        lastPostId : threadidi[p],
-        threadCount : threadcount[p]
-      };
-    } else {
-      obj = {
-        lastPostId : postidi[p],
-        threadCount : threadcount[p]
-      };
-    }
-
-    lynxUpdate('boards', bo, obj, function() {
-
-    });
-  }
-
-}
-
-function getFileCount(uri, ThreadID, FileLength) {
-
-  if (FileLength === 1) {
-    if (fileBor[0] === null) {
-      fileBor[0] = uri;
-      fileThreadid[0] = ThreadID;
-      fileCountNum[0] = 1;
-    } else {
-      var foundFlag = false;
-      for (var i = 0; i < fileBor.length; i++) {
-        if (fileBor[i] === uri) {
-          if (fileThreadid[i] === ThreadID) {
-            foundFlag = true;
-            fileCountNum[i] = fileCountNum[i] + 1;
-          }
-        }
-      }
-      if (foundFlag === false) {
-        fileBor.push(uri);
-        fileThreadid.push(ThreadID);
-        fileCountNum.push(1);
-      }
-
-    }
-  }
-
-  for (var p = 0; p < fileBor.length; p++) {
-    var bo = {
-      boardUri : fileBor[p],
-      threadId : fileThreadid[p]
-    };
-
-    var obj = {
-      fileCount : fileCountNum[p]
-    };
-
-    lynxUpdate('threads', bo, obj, function() {
-
-    });
-  }
-
-}
-
-function buildFiles(thread, threadid) {
-  // build files
-
-  if (threadid === undefined) {
-    threadid = null;
-  }
   var files = [];
+
   if (thread.files) {
     try {
       var infFiles = JSON.parse(thread.files);
@@ -435,16 +155,30 @@ function buildFiles(thread, threadid) {
       for (var j = 0; j < infFiles.length; j++) {
         var infFile = infFiles[j];
         var mimeType = getMime(infFile.file_path);
+
         if (mimeType === 'ERROR') {
           mimeType = 'INVALID!';
         }
+
         var tempo = fixImageUrl(infFile.file_path);
         var rthumb = fixThumb(infFile.thumb_path);
 
-        buildGridMeta(infFile, thread, threadid, mimeType, tempo, rthumb,
-            infFile.thumb_path);
+        buildGridMeta(uri, infFile, thread, threadid, mimeType, tempo, rthumb,
+            infFile.thumb_path, function migratedFiles(error) {
+
+              // TODO
+              if (error) {
+                console.log(error);
+              } else {
+
+              }
+
+            });
+
         infFile.thumb_path = fixThumb(infFile.thumb_path);
+
         infFile.file_path = fixImageUrl(infFile.file_path);
+
         files.push({
           originalName : infFile.name,
           path : infFile.file_path,
@@ -456,205 +190,40 @@ function buildFiles(thread, threadid) {
           width : infFile.width,
           height : infFile.height
         });
-      }
-    } catch (e) {
-      console.log(e);
 
+      }
+    } catch (error) {
+      console.log(error);
     }
   }
+
   return files;
 }
 
-function buildGridMeta(file, thread, reply, mimes, fixedfile, realthumb, thumb) {
+function buildGridMeta(uri, file, thread, reply, mimes, fixedfile, realthumb,
+    thumb, callback) {
 
-  var isThread = true;
-
-  if (reply === null) {
-
-  } else {
-
-    isThread = false;
-  }
-
-  if (isThread === true) {
-    var obj = {
-      boardUri : thread.uri,
-
-      threadId : thread.id,
-
-      type : 'media',
-
-    };
-  } else {
-
-    var obj = {
-      boardUri : thread.uri,
-      threadId : thread.id,
-      postId : reply,
-      type : 'media'
-    };
-  }
-
-  writeFile(file.file_path, fixedfile, mimes, obj);
-  writeFile(thumb, realthumb, mimes, obj);
-
-}
-
-function repliesToLynx(uri, thread, callback) {
-  // get a list of all threads' posts
-  connection.query('SELECT * from posts_' + uri + ' where thread=' + thread.id,
-      function(err, replies) {
-        if (err) {
-          console.error('boardToLynx - mysql.replies', err);
-        } else {
-          if (!replies) {
-            return; // no replies, no work
-          }
-
-          for (var k = 0; k < replies.length; k++) {
-
-            findPostcount(uri, replies.length, thread.id);
-            var reply = replies[k];
-
-            var reply_salt = crypto.createHash('sha256').update(
-                'gunshot gunshot Cash registernoise' + Math.random()
-                    + new Date()).digest('hex');
-            // stipe message of tabs and stuff
-            var replymessage = reply.body_nomarkup.toLowerCase().replace(
-                /[ \n\t]/g, '');
-            var objreplymessage = crypto.createHash('md5').update(replymessage)
-                .digest('base64');
-            var obj = {
-              boardUri : uri,
-              threadId : thread.id,
-              postId : reply.id,
-              creation : new Date(reply.time * 1000),
-              ip : reply.ip.split(/\./),
-              message : reply.body_nomarkup,
-              hash : objreplymessage, // stuff used for R9K
-              salt : reply_salt, // ID generation
-              name : reply.name,
-              subject : reply.subject, // empty subject is null in lynx too
-              markdown : reply.body,
-            };
-
-            if (reply.password) {
-              obj.password = reply.password;
-            }
-            if (reply.email) {
-
-              obj.email = thread.email;
-            }
-            var files = buildFiles(reply, thread.id);
-            if (files.length) {
-              obj.files = files;
-            }
-
-            getFileCount(uri, thread.id, files.length);
-            boardCheck(uri, reply.id, 0);
-
-            lynxCreate('posts', obj);
-
-          }
-        }
-      });
-}
-
-function findPostcount(uri, reply, threadid) {
-  var id = {
+  var obj = {
     boardUri : uri,
-    threadId : threadid
+    threadId : thread.id,
+    type : 'media'
   };
 
-  if (reply === 0) {
-
-  } else {
-    if (reply > 5) {
-      reply = 5;
-    }
-    var emptyArray = [ 0 ];
-
-    var postcount = {
-      postCount : reply,
-      latestPosts : emptyArray
-    };
-
-    lynxUpdate('threads', id, postcount, function() {
-
-    });
+  if (reply) {
+    obj.postId = thread.id;
+    obj.threadId = reply;
   }
-}
 
-function boardToLynx(uri) {
+  writeFile(file.file_path, fixedfile, mimes, obj, function wroteFile(error) {
 
-  users.updateOne({
-    login : lynxModName
-  }, {
-    $push : {
-      ownedBoards : uri
+    if (error) {
+      callback(error);
+    } else {
+      writeFile(thumb, realthumb, mimes, obj, callback);
     }
+
   });
 
-  // get a list of threads
-  connection.query('SELECT * from posts_' + uri + ' where thread IS NULL',
-      function(err, threads) {
-
-        // does this thread exist in LynxChan?
-        for (var i = 0; i < threads.length; i++) {
-          var thread = threads[i];
-
-          var scopeLoop = function(thread) {
-
-            var thread_salt = crypto.createHash('sha256').update(
-                'gunshot gunshot Cash registernoise' + Math.random()
-                    + new Date()).digest('hex');
-
-            var threadmessage = thread.body_nomarkup.toLowerCase().replace(
-                /[ \n\t]/g, '');
-            var objthreadmessage = crypto.createHash('md5').update(
-                threadmessage).digest('base64');
-
-            var obj = {
-              boardUri : uri,
-              threadId : thread.id,
-              creation : new Date(thread.time * 1000),
-              lastBump : new Date(thread.bump * 1000),
-              id : null,
-              email : null,
-              ip : thread.ip.split(/\./),
-              fileCount : 0,
-              page : 1,
-              message : thread.body_nomarkup,
-              hash : objthreadmessage,// used for r9k
-              salt : thread_salt,
-              name : thread.name,
-              pinned : thread.sticky ? true : false,
-              locked : thread.locked ? true : false,
-              subject : thread.subject, // empty subject is null in lynx too
-              password : thread.password,
-              markdown : thread.body,
-            };
-
-            if (thread.email) {
-              obj.email = thread.email;
-            }
-
-            var files = buildFiles(thread);
-
-            if (files.length) {
-              obj.files = files;
-
-            }
-            boardCheck(uri, thread.id, 1);
-
-            lynxCreate('threads', obj);
-
-            repliesToLynx(uri, thread, function() {
-            });
-
-          }(thread);
-        }
-      });
 }
 
 function fixThumb(th) {
@@ -760,7 +329,7 @@ function fixImageUrl(img) {
 function lynxCreate(table, obj, callback) {
   mondb.collection(table, function(err, col) {
     col.insert(obj, function() {
-      // console.log('inserting into DB');
+
       if (callback) {
         callback();
       }
@@ -769,6 +338,7 @@ function lynxCreate(table, obj, callback) {
 }
 
 function lynxUpdate(table, threadid, obj, callback) {
+
   mondb.collection(table, function(err, col) {
     col.update(threadid, {
       $set : obj
@@ -782,159 +352,8 @@ function lynxUpdate(table, threadid, obj, callback) {
 
 }
 
-exports.init = function(modName, path) {
-
-  lynxModName = modName;
-  boardPath = path;
-
-  connection.query('SELECT * from boards', function(err, boards) {
-
-    for (var i = 0; i < boards.length; i++) {
-
-      var board = boards[i];
-
-      console.log('Migrating /' + board.uri + '/');
-
-      var board_salt = crypto.createHash('sha256').update(
-          'gunshot gunshot Cash registernoise' + Math.random() + new Date())
-          .digest('hex');
-
-      var obj = {
-        boardUri : board.uri,
-        boardName : board.title,
-        boardDescription : board.subtitle,
-        settings : [ 'disableIds', 'requireThreadFile' ],
-        owner : lynxModName,
-        tags : [],
-        salt : board_salt
-      };
-
-      lynxCreate('boards', obj);
-
-      boardToLynx(board.uri);
-
-    }
-
-    setMod(boards);
-
-  });
-
-  getBanList();
-
-  moveStaffLog();
-};
-
-function sortPostCount(board, ID, currthread, currBoard) {
-
-  var len = board.length;
-  if (currBoard === null) {
-    currBoard = board[0].uri;
-  } else {
-
-    for ( var i in board) {
-      if (currBoard === board[i].uri) {
-
-      } else {
-        return;
-      }
-    }
-  }
-
-  connection.query('SELECT * from posts_' + currBoard + 'where thread is null',
-      function(err, threads) {
-
-        console.log('in Query');
-
-        if (!threads) {
-          console.log('No Thread', currBoard);
-          var flag = false;
-          for ( var lel in board) {
-            if (board[lel] === currBoard) {
-              var kek = 0;
-              kek = lel + 1;
-              if (kek < board.length && flag === false) {
-                currBoard = board[kek].uri;
-                flag = true;
-              } else {
-                return;
-              }
-
-              console.log(board.length);
-            }
-          }
-
-          sortPostCount(board, 1, 0, currBoard);
-
-        } else {
-
-          for ( var k in threads) {
-            sortingPost(threads[k].thread, currBoard);
-          }
-
-          var flag = false;
-
-          for ( var lel in board) {
-            if (board[lel] === currBoard) {
-              var kek = 0;
-              kek = lel + 1;
-              if (kek < board.length && flag === false) {
-                currBoard = board[kek].uri;
-                flag = true;
-              } else {
-                return;
-              }
-            }
-          }
-
-          sortPostCount(board, 0, 0, currBoard);
-        }
-
-      });
-
-}
-
-function sortingPost(Thread, board) {
-
-  connection.query('SELECT * from posts_' + board + 'Where thread=' + Thread,
-      function(err, thred) {
-
-        if (!thred) {
-          var postcount = 0;
-          var Lastposts = [];
-        } else {
-          var postcount = thred.length;
-          var Lastposts = [];
-          var lastFive = thred[k] - 5;
-          for (var k = 0; k < thred.length; k++) {
-            if (thred[k] > 5) {
-
-              if (k > 5 && k >= lastFive) {
-                Lastposts.push(thred[k].id);
-
-              }
-            } else {
-              Lastposts.push(thred[k].id);
-            }
-
-          }
-
-        }
-
-        var thredObj = {
-          postCount : postcount,
-          latestPosts : Lastposts
-        };
-        var setObj = {
-          threadId : Thread
-        };
-
-        lynxUpdate('threads', setObj, thredObj, function() {
-        });
-
-      });
-}
-
-function writeFile(path, dest, mime, meta) {
+// Gridfs handling {
+function writeFile(path, dest, mime, meta, callback) {
 
   path = boardPath + path;
 
@@ -950,24 +369,363 @@ function writeFile(path, dest, mime, meta) {
     if (error) {
       callback(error);
     } else {
-      writeFileOnOpenFile(gs, path, dest, meta, mime);
+      writeFileOnOpenFile(gs, path, dest, meta, mime, callback);
     }
   });
 
-};
+}
 
-var writeFileOnOpenFile = function(gs, path, destination, meta, mime) {
+function writeFileOnOpenFile(gs, path, destination, meta, mime, callback) {
 
   gs.writeFile(path, function wroteFile(error) {
 
     // style exception, too simple
     gs.close(function closed(closeError, result) {
-      if (error) {
-        console.log(error || closeError);
-      }
-
+      callback(error || closeError);
     });
     // style exception, too simple
 
   });
+}
+// } Gridfs handling
+
+// Misc functions {
+function getMessageHash(message) {
+
+  message = message.toLowerCase().replace(/[ \n\t]/g, '');
+
+  return crypto.createHash('md5').update(message).digest('base64');
+
+}
+// } Misc functions
+
+// Board migration {
+
+// Thread migration {
+
+// Reply migration {
+function migrateReply(uri, thread, reply, callback) {
+
+  console.log('Migrating reply ' + reply.id);
+
+  posts.insertOne({
+    boardUri : uri,
+    threadId : thread.id,
+    postId : reply.id,
+    creation : new Date(reply.time * 1000),
+    ip : reply.ip.split(/\./),
+    message : reply.body_nomarkup,
+    hash : getMessageHash(reply.body_nomarkup),
+    name : reply.name,
+    subject : reply.subject,
+    markdown : reply.body,
+    password : reply.password,
+    email : reply.email,
+    files : buildFiles(uri, reply, thread.id)
+  }, callback);
+
+}
+
+function iterateReplies(uri, thread, foundReplies, callback, index) {
+
+  index = index || 0;
+
+  if (index >= foundReplies.length) {
+    callback();
+    return;
+  }
+
+  migrateReply(uri, thread, foundReplies[index], function migratedReply(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      iterateReplies(uri, thread, foundReplies, callback, ++index);
+    }
+
+  });
+
+}
+
+function migrateReplies(uri, thread, callback) {
+
+  connection.query('SELECT * from posts_' + uri + ' where thread=' + thread.id,
+      function(error, foundReplies) {
+
+        if (error) {
+          callback(error);
+        } else {
+          iterateReplies(uri, thread, foundReplies, callback);
+        }
+
+      });
+}
+// } Reply migration
+
+function migrateThread(uri, thread, callback) {
+
+  console.log('Migrating thread ' + thread.id);
+
+  var thread_salt = crypto.createHash('sha256').update(
+      'gunshot gunshot Cash registernoise' + Math.random() + new Date())
+      .digest('hex');
+
+  threads.insertOne({
+    boardUri : uri,
+    threadId : thread.id,
+    creation : new Date(thread.time * 1000),
+    lastBump : new Date(thread.bump * 1000),
+    id : null,
+    email : null,
+    ip : thread.ip.split(/\./).map(function(element) {
+      return +element;
+    }),
+    fileCount : 0,
+    page : 1,
+    message : thread.body_nomarkup,
+    hash : getMessageHash(thread.body_nomarkup),
+    salt : thread_salt,
+    name : thread.name,
+    pinned : thread.sticky ? true : false,
+    locked : thread.locked ? true : false,
+    subject : thread.subject,
+    password : thread.password,
+    markdown : thread.body,
+    email : thread.email,
+    files : buildFiles(uri, thread)
+  }, function createdThread(error) {
+
+    if (error) {
+      callback(error)
+    } else {
+      migrateReplies(uri, thread, callback);
+    }
+
+  });
+
+}
+
+function iterateThreads(uri, foundThreads, callback, index) {
+
+  index = index || 0;
+
+  if (index >= foundThreads.length) {
+    callback();
+    return;
+
+  }
+
+  migrateThread(uri, foundThreads[index], function migratedThread(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      iterateThreads(uri, foundThreads, callback, ++index);
+    }
+
+  });
+
+}
+
+function migrateThreads(uri, callback) {
+
+  connection.query('SELECT * from posts_' + uri + ' where thread IS NULL',
+      function(error, foundThreads) {
+
+        if (error) {
+          callback(error);
+        } else {
+          iterateThreads(uri, foundThreads, callback);
+        }
+
+      });
+}
+// } Thread migration
+
+function migrateBoard(board, callback) {
+
+  console.log('Migrating /' + board.uri + '/');
+
+  var boardSalt = crypto.createHash('sha256').update(
+      'gunshot gunshot Cash registernoise' + Math.random() + new Date())
+      .digest('hex');
+
+  boards.insertOne({
+    boardUri : board.uri,
+    boardName : board.title,
+    boardDescription : board.subtitle,
+    settings : [ 'disableIds', 'requireThreadFile' ],
+    owner : lynxModName,
+    tags : [],
+    salt : boardSalt
+  }, function createdBoard(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      migrateThreads(board.uri, callback);
+    }
+
+  });
+
+}
+
+function commitBoardAggregatedData(postResults, callback) {
+
+  threads.aggregate([ {
+    $group : {
+      _id : '$boardUri',
+      threadCount : {
+        $sum : 1
+      },
+      maxThreadId : {
+        $max : '$threadId'
+      }
+    }
+  } ], function gotAggregatedData(error, results) {
+
+    if (error || !results.length) {
+      callback(error);
+    } else {
+
+      var operations = [];
+
+      for (var i = 0; i < results.length; i++) {
+
+        var result = results[i];
+
+        if (result.maxThreadId < postResults[result._id]) {
+          result.maxThreadId = postResults[result._id];
+        }
+
+        operations.push({
+          updateOne : {
+            filter : {
+              boardUri : result._id
+            },
+            update : {
+              $set : {
+                threadCount : result.threadCount,
+                lastPostId : result.maxThreadId
+              }
+            }
+          }
+        });
+
+      }
+
+      boards.bulkWrite(operations, callback);
+
+    }
+
+  });
+
+}
+
+function aggregateBoardsInformation(callback) {
+
+  posts.aggregate([ {
+    $group : {
+      _id : '$boardUri',
+      maxPostId : {
+        $max : '$postId'
+      }
+    }
+  } ], function gotPostData(error, results) {
+
+    if (error) {
+      callback(error);
+    } else {
+
+      var object = {};
+
+      for (var i = 0; i < results.length; i++) {
+        object[results[i]._id] = results[i].maxPostId;
+      }
+
+      commitBoardAggregatedData(object, callback);
+    }
+
+  });
+
+}
+
+function iterateBoards(foundBoards, callback, index) {
+
+  index = index || 0;
+
+  if (index >= foundBoards.length) {
+    aggregateBoardsInformation(callback);
+    return;
+  }
+
+  migrateBoard(foundBoards[index], function migratedBoard(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      iterateBoards(foundBoards, callback, ++index);
+    }
+
+  });
+
+}
+
+function migrateBoards(callback) {
+
+  connection.query('SELECT * from boards', function(err, foundBoards) {
+
+    var uris = [];
+
+    for (var i = 0; i < foundBoards.length; i++) {
+      uris.push(foundBoards[i].uri);
+    }
+
+    users.updateOne({
+      login : lynxModName
+    }, {
+      $set : {
+        ownedBoards : uris
+      }
+    }, function setOwnedBoards(error) {
+
+      if (error) {
+        callback(error);
+      } else {
+        iterateBoards(foundBoards, callback);
+      }
+
+    });
+
+  });
+
+}
+// } Board migration
+
+exports.init = function(modName, path) {
+
+  lynxModName = modName;
+  boardPath = path;
+
+  migrateBoards(function migratedBoards(error) {
+
+    if (error) {
+      console.log(error);
+    } else {
+      migrateMods(function migratedMods(error) {
+
+        if (error) {
+          console.log(error);
+        } else {
+          // TODO
+        }
+
+      });
+    }
+
+  });
+
+  getBanList();
+
+  moveStaffLog();
 };
