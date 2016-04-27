@@ -2,11 +2,11 @@
 
 var mongoHandler = require('./mongoDb');
 var mongo = require('mongodb');
-var connection = require('./mysqlDb').connection;
+var vichanConnection = require('./mysqlDb').connection;
 var crypto = require('crypto');
 var users = mongoHandler.users();
 var threads = mongoHandler.threads();
-var mondb = mongoHandler.conn();
+var mongoConnection = mongoHandler.conn();
 var posts = mongoHandler.posts();
 var boards = mongoHandler.boards();
 var boardPath;
@@ -65,7 +65,7 @@ function iterateMods(foundMods, callback, index) {
 
 function migrateMods(callback) {
 
-  connection.query('SELECT * from mods', function(err, foundMods) {
+  vichanConnection.query('SELECT * from mods', function(err, foundMods) {
     iterateMods(foundMods, callback);
   });
 
@@ -75,7 +75,7 @@ function migrateMods(callback) {
 
 function getBanList() {
 
-  connection.query('SELECT * from bans', function(err, bans) {
+  vichanConnection.query('SELECT * from bans', function(err, bans) {
     for ( var i in bans) {
       var ban = bans[i];
       if (!ban) {
@@ -115,7 +115,7 @@ function getBanList() {
 
 function moveStaffLog() {
 
-  connection.query('SELECT * from modlogs', function(err, logs) {
+  vichanConnection.query('SELECT * from modlogs', function(err, logs) {
     for ( var i in logs) {
       var len = logs.length;
       var logz = logs[i];
@@ -138,88 +138,6 @@ function moveStaffLog() {
         lynxCreate('staffLogs', logObj);
 
       }
-    }
-
-  });
-
-}
-
-function buildFiles(uri, thread, threadid) {
-
-  var files = [];
-
-  if (thread.files) {
-    try {
-      var infFiles = JSON.parse(thread.files);
-
-      for (var j = 0; j < infFiles.length; j++) {
-        var infFile = infFiles[j];
-        var mimeType = getMime(infFile.file_path);
-
-        if (mimeType === 'ERROR') {
-          mimeType = 'INVALID!';
-        }
-
-        var tempo = fixImageUrl(infFile.file_path);
-        var rthumb = fixThumb(infFile.thumb_path);
-
-        buildGridMeta(uri, infFile, thread, threadid, mimeType, tempo, rthumb,
-            infFile.thumb_path, function migratedFiles(error) {
-
-              // TODO
-              if (error) {
-                console.log(error);
-              } else {
-
-              }
-
-            });
-
-        infFile.thumb_path = fixThumb(infFile.thumb_path);
-
-        infFile.file_path = fixImageUrl(infFile.file_path);
-
-        files.push({
-          originalName : infFile.name,
-          path : infFile.file_path,
-          mime : mimeType,
-          thumb : infFile.thumb_path,
-          name : infFile.file,
-          size : infFile.size,
-          md5 : infFile.hash,
-          width : infFile.width,
-          height : infFile.height
-        });
-
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  }
-
-  return files;
-}
-
-function buildGridMeta(uri, file, thread, reply, mimes, fixedfile, realthumb,
-    thumb, callback) {
-
-  var obj = {
-    boardUri : uri,
-    threadId : thread.id,
-    type : 'media'
-  };
-
-  if (reply) {
-    obj.postId = thread.id;
-    obj.threadId = reply;
-  }
-
-  writeFile(file.file_path, fixedfile, mimes, obj, function wroteFile(error) {
-
-    if (error) {
-      callback(error);
-    } else {
-      writeFile(thumb, realthumb, mimes, obj, callback);
     }
 
   });
@@ -254,50 +172,6 @@ function fixThumb(th) {
 
 }
 
-function getMime(img) {
-  var len = img.length
-
-  var foundDot = false;
-  var mimeType = '';
-  for (var i = 0; i < len; i++) {
-
-    var temp = img.substr(i, 1);
-
-    if (temp === '.' && foundDot === false) {
-      foundDot = true;
-      mimeType = img.substr(i + 1, img.length - i);
-
-    }
-
-  }
-
-  if (foundDot === true) {
-    if (mimeType === 'png') {
-      mimeType = 'image/png';
-    } else if (mimeType === 'jpg' || mimeType === 'jpeg') {
-      mimeType = 'image/jpeg';
-    } else if (mimeType === 'gif') {
-      mimeType = 'image/gif';
-    } else if (mimeType === 'bmp') {
-      mimeType = 'image/bmp';
-    } else if (mimeType === 'webm') {
-      mimeType = 'video/webm';
-      // Also accepts Audio webums
-    } else if (mimeType === 'mpeg') {
-      mimeType = 'audio/mpeg';
-    } else if (mimeType === 'mp4') {
-      mimeType = 'video/mp4';
-    } else if (mimeType === 'ogg') {
-      mimeType = 'video/ogg';
-    } else {
-      console.log('ERROR: Invalid video format?');
-      return 'ERROR';
-    }
-    return mimeType;
-
-  }
-}
-
 function fixImageUrl(img) {
   var len = img.length;
   var Act = img;
@@ -327,7 +201,7 @@ function fixImageUrl(img) {
 }
 
 function lynxCreate(table, obj, callback) {
-  mondb.collection(table, function(err, col) {
+  mongoConnection.collection(table, function(err, col) {
     col.insert(obj, function() {
 
       if (callback) {
@@ -337,21 +211,6 @@ function lynxCreate(table, obj, callback) {
   });
 }
 
-function lynxUpdate(table, threadid, obj, callback) {
-
-  mondb.collection(table, function(err, col) {
-    col.update(threadid, {
-      $set : obj
-    }, function() {
-      // updating
-      if (callback) {
-        callback();
-      }
-    });
-  });
-
-}
-
 // Gridfs handling {
 function writeFile(path, dest, mime, meta, callback) {
 
@@ -359,7 +218,7 @@ function writeFile(path, dest, mime, meta, callback) {
 
   meta.lastModified = new Date();
 
-  var gs = mongo.GridStore(mondb, dest, 'w', {
+  var gs = mongo.GridStore(mongoConnection, dest, 'w', {
     'content_type' : mime,
     metadata : meta
   });
@@ -381,6 +240,7 @@ function writeFileOnOpenFile(gs, path, destination, meta, mime, callback) {
 
     // style exception, too simple
     gs.close(function closed(closeError, result) {
+
       callback(error || closeError);
     });
     // style exception, too simple
@@ -396,6 +256,164 @@ function getMessageHash(message) {
 
   return crypto.createHash('md5').update(message).digest('base64');
 
+}
+
+// File migration {
+function buildGridMeta(uri, file, posting, threadId, mimes, fixedfile,
+    realthumb, thumb, callback) {
+
+  var obj = {
+    boardUri : uri,
+    threadId : posting.id,
+    type : 'media'
+  };
+
+  if (threadId) {
+    obj.postId = posting.id;
+    obj.threadId = threadId;
+  }
+
+  writeFile(file.file_path, fixedfile, mimes, obj, function wroteFile(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      writeFile(thumb, realthumb, mimes, obj, callback);
+    }
+
+  });
+
+}
+
+function migrateFile(uri, posting, threadId, infFile, callback) {
+
+  var mimeType = getMime(infFile.file_path);
+
+  if (!mimeType) {
+    callback();
+  }
+
+  var fixedPath = fixImageUrl(infFile.file_path);
+  var fixedThumb = fixThumb(infFile.thumb_path);
+
+  console.log('Migrating file ' + fixedPath);
+
+  buildGridMeta(uri, infFile, posting, threadId, mimeType, fixedPath,
+      fixedThumb, infFile.thumb_path, function migratedFiles(error) {
+
+        if (error) {
+          callback(error);
+        } else {
+
+          callback(null, {
+            originalName : infFile.name,
+            path : fixedPath,
+            mime : mimeType,
+            thumb : fixedThumb,
+            name : infFile.file,
+            size : infFile.size,
+            md5 : infFile.hash,
+            width : infFile.width,
+            height : infFile.height
+          });
+
+        }
+
+      });
+
+}
+
+function iterateFiles(uri, posting, threadId, foundFiles, callback, builtFiles,
+    index) {
+
+  builtFiles = builtFiles || [];
+  index = index || 0;
+
+  if (index >= foundFiles.length) {
+    callback(null, builtFiles);
+    return;
+  }
+
+  migrateFile(uri, posting, threadId, foundFiles[index], function(error,
+      newFile) {
+
+    if (error) {
+      callback(error);
+    } else {
+
+      if (newFile) {
+        builtFiles.push(newFile);
+      }
+
+      iterateFiles(uri, posting, threadId, foundFiles, callback, builtFiles,
+          ++index);
+    }
+
+  });
+
+}
+
+function migrateFiles(uri, posting, threadId, callback) {
+
+  if (!posting.files) {
+    callback();
+    return;
+  }
+
+  try {
+    var foundFiles = JSON.parse(posting.files);
+
+  } catch (error) {
+    callback(error);
+    return;
+  }
+
+  iterateFiles(uri, posting, threadId, foundFiles, function builtFiles(error,
+      builtFiles) {
+
+    if (error) {
+      callback(error);
+    } else {
+
+      var collectionToUse = threadId ? posts : threads;
+
+      var queryBlock = {
+        boardUri : uri,
+        threadId : posting.id
+      };
+
+      if (threadId) {
+        queryBlock.threadId = threadId;
+        queryBlock.postId = posting.id;
+      }
+
+      collectionToUse.updateOne(queryBlock, {
+        $set : {
+          files : builtFiles
+        }
+      }, callback);
+
+    }
+
+  });
+
+}
+// } File migration
+
+function getMime(pathName) {
+  var pathParts = pathName.split('.');
+
+  var mime;
+
+  if (pathParts.length) {
+    var extension = pathParts[pathParts.length - 1];
+    mime = exports.MIMETYPES[extension.toLowerCase()] || 'text/plain';
+
+  } else {
+    mime = 'text/plain';
+  }
+
+  return mime;
 }
 // } Misc functions
 
@@ -413,16 +431,26 @@ function migrateReply(uri, thread, reply, callback) {
     threadId : thread.id,
     postId : reply.id,
     creation : new Date(reply.time * 1000),
-    ip : reply.ip.split(/\./),
+    ip : thread.ip.split(/\./).map(function(element) {
+      return +element;
+    }),
     message : reply.body_nomarkup,
     hash : getMessageHash(reply.body_nomarkup),
     name : reply.name,
     subject : reply.subject,
+    files : [],
     markdown : reply.body,
     password : reply.password,
-    email : reply.email,
-    files : buildFiles(uri, reply, thread.id)
-  }, callback);
+    email : reply.email
+  }, function migratedReply(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      migrateFiles(uri, reply, thread.id, callback);
+    }
+
+  });
 
 }
 
@@ -447,24 +475,75 @@ function iterateReplies(uri, thread, foundReplies, callback, index) {
 
 }
 
+function aggregateThreadLatestReplies(uri, thread, callback) {
+
+  posts.aggregate([ {
+    $match : {
+      boardUri : uri,
+      threadId : thread.id
+    }
+  }, {
+    $sort : {
+      postId : -1
+    }
+  }, {
+    $limit : 5
+  }, {
+    $group : {
+      _id : 0,
+      posts : {
+        $push : '$postId'
+      }
+    }
+  } ], function gotPosts(error, results) {
+
+    if (error || !results.length) {
+      callback(error);
+    } else {
+
+      threads.updateOne({
+        boardUri : uri,
+        threadId : thread.id
+      }, {
+        $set : {
+          latestPosts : results[0].posts
+        }
+      }, callback);
+
+    }
+
+  });
+
+}
+
 function migrateReplies(uri, thread, callback) {
 
-  connection.query('SELECT * from posts_' + uri + ' where thread=' + thread.id,
-      function(error, foundReplies) {
+  var query = 'SELECT * from posts_' + uri + ' where thread=' + thread.id;
 
-        if (error) {
-          callback(error);
-        } else {
-          iterateReplies(uri, thread, foundReplies, callback);
-        }
+  vichanConnection.query(query, function(error, foundReplies) {
 
-      });
+    if (error) {
+      callback(error);
+    } else {
+      iterateReplies(uri, thread, foundReplies,
+          function migratedReplies(error) {
+
+            if (error) {
+              callback(error);
+            } else {
+              aggregateThreadLatestReplies(uri, thread, callback);
+            }
+
+          });
+    }
+
+  });
 }
 // } Reply migration
 
 function migrateThread(uri, thread, callback) {
 
-  console.log('Migrating thread ' + thread.id);
+  console.log('\nMigrating thread ' + thread.id);
 
   var thread_salt = crypto.createHash('sha256').update(
       'gunshot gunshot Cash registernoise' + Math.random() + new Date())
@@ -475,13 +554,9 @@ function migrateThread(uri, thread, callback) {
     threadId : thread.id,
     creation : new Date(thread.time * 1000),
     lastBump : new Date(thread.bump * 1000),
-    id : null,
-    email : null,
     ip : thread.ip.split(/\./).map(function(element) {
       return +element;
     }),
-    fileCount : 0,
-    page : 1,
     message : thread.body_nomarkup,
     hash : getMessageHash(thread.body_nomarkup),
     salt : thread_salt,
@@ -491,14 +566,22 @@ function migrateThread(uri, thread, callback) {
     subject : thread.subject,
     password : thread.password,
     markdown : thread.body,
-    email : thread.email,
-    files : buildFiles(uri, thread)
+    email : thread.email
   }, function createdThread(error) {
 
     if (error) {
-      callback(error)
+      callback(error);
     } else {
-      migrateReplies(uri, thread, callback);
+
+      migrateReplies(uri, thread, function migratedThread(error) {
+
+        if (error) {
+          callback(error);
+        } else {
+          migrateFiles(uri, thread, null, callback);
+        }
+
+      });
     }
 
   });
@@ -529,8 +612,9 @@ function iterateThreads(uri, foundThreads, callback, index) {
 
 function migrateThreads(uri, callback) {
 
-  connection.query('SELECT * from posts_' + uri + ' where thread IS NULL',
-      function(error, foundThreads) {
+  vichanConnection.query(
+      'SELECT * from posts_' + uri + ' where thread IS NULL', function(error,
+          foundThreads) {
 
         if (error) {
           callback(error);
@@ -542,9 +626,66 @@ function migrateThreads(uri, callback) {
 }
 // } Thread migration
 
+function aggregateThreadData(uri, callback) {
+
+  posts.aggregate([ {
+    $match : {
+      boardUri : uri
+    }
+  }, {
+    $group : {
+      _id : '$threadId',
+      totalPosts : {
+        $sum : 1
+      },
+      totalFiles : {
+        $sum : {
+          $size : '$files'
+        }
+      }
+    }
+  } ], function gotResults(error, results) {
+
+    if (error) {
+      callback(error);
+    } else if (results.length) {
+
+      var operations = [];
+
+      for (var i = 0; i < results.length; i++) {
+
+        var result = results[i];
+
+        operations.push({
+          updateOne : {
+            filter : {
+              boardUri : uri,
+              threadId : result._id
+            },
+            update : {
+              $set : {
+                postCount : result.totalPosts,
+                fileCount : result.totalFiles
+              }
+            }
+          }
+        });
+
+      }
+
+      threads.bulkWrite(operations, callback);
+
+    } else {
+      callback();
+    }
+
+  });
+
+}
+
 function migrateBoard(board, callback) {
 
-  console.log('Migrating /' + board.uri + '/');
+  console.log('\n\n\nMigrating /' + board.uri + '/');
 
   var boardSalt = crypto.createHash('sha256').update(
       'gunshot gunshot Cash registernoise' + Math.random() + new Date())
@@ -563,7 +704,15 @@ function migrateBoard(board, callback) {
     if (error) {
       callback(error);
     } else {
-      migrateThreads(board.uri, callback);
+      migrateThreads(board.uri, function migratedThreads(error) {
+
+        if (error) {
+          callback(error);
+        } else {
+          aggregateThreadData(board.uri, callback);
+        }
+
+      });
     }
 
   });
@@ -622,7 +771,7 @@ function commitBoardAggregatedData(postResults, callback) {
 
 }
 
-function aggregateBoardsInformation(callback) {
+function aggregateBoardsData(callback) {
 
   posts.aggregate([ {
     $group : {
@@ -655,7 +804,7 @@ function iterateBoards(foundBoards, callback, index) {
   index = index || 0;
 
   if (index >= foundBoards.length) {
-    aggregateBoardsInformation(callback);
+    aggregateBoardsData(callback);
     return;
   }
 
@@ -673,7 +822,7 @@ function iterateBoards(foundBoards, callback, index) {
 
 function migrateBoards(callback) {
 
-  connection.query('SELECT * from boards', function(err, foundBoards) {
+  vichanConnection.query('SELECT * from boards', function(err, foundBoards) {
 
     var uris = [];
 
@@ -710,12 +859,12 @@ exports.init = function(modName, path) {
   migrateBoards(function migratedBoards(error) {
 
     if (error) {
-      console.log(error);
+      throw error;
     } else {
       migrateMods(function migratedMods(error) {
 
         if (error) {
-          console.log(error);
+          throw error;
         } else {
           // TODO
         }
@@ -725,7 +874,127 @@ exports.init = function(modName, path) {
 
   });
 
-  getBanList();
+  // getBanList();
 
-  moveStaffLog();
+  // moveStaffLog();
+};
+
+exports.MIMETYPES = {
+  a : 'application/octet-stream',
+  ai : 'application/postscript',
+  aif : 'audio/x-aiff',
+  aifc : 'audio/x-aiff',
+  aiff : 'audio/x-aiff',
+  au : 'audio/basic',
+  avi : 'video/x-msvideo',
+  bat : 'text/plain',
+  bin : 'application/octet-stream',
+  bmp : 'image/x-ms-bmp',
+  c : 'text/plain',
+  cdf : 'application/x-cdf',
+  csh : 'application/x-csh',
+  css : 'text/css',
+  dll : 'application/octet-stream',
+  doc : 'application/msword',
+  dot : 'application/msword',
+  dvi : 'application/x-dvi',
+  eml : 'message/rfc822',
+  eps : 'application/postscript',
+  etx : 'text/x-setext',
+  exe : 'application/octet-stream',
+  gif : 'image/gif',
+  gtar : 'application/x-gtar',
+  h : 'text/plain',
+  hdf : 'application/x-hdf',
+  htm : 'text/html',
+  html : 'text/html',
+  jpe : 'image/jpeg',
+  jpeg : 'image/jpeg',
+  jpg : 'image/jpeg',
+  js : 'application/x-javascript',
+  ksh : 'text/plain',
+  latex : 'application/x-latex',
+  m1v : 'video/mpeg',
+  man : 'application/x-troff-man',
+  me : 'application/x-troff-me',
+  mht : 'message/rfc822',
+  mhtml : 'message/rfc822',
+  mif : 'application/x-mif',
+  mov : 'video/quicktime',
+  movie : 'video/x-sgi-movie',
+  mp2 : 'audio/mpeg',
+  mp3 : 'audio/mpeg',
+  mp4 : 'video/mp4',
+  mpa : 'video/mpeg',
+  mpe : 'video/mpeg',
+  mpeg : 'video/mpeg',
+  mpg : 'video/mpeg',
+  ms : 'application/x-troff-ms',
+  nc : 'application/x-netcdf',
+  nws : 'message/rfc822',
+  o : 'application/octet-stream',
+  obj : 'application/octet-stream',
+  oda : 'application/oda',
+  ogg : 'audio/ogg',
+  ogv : 'video/ogg',
+  pbm : 'image/x-portable-bitmap',
+  pdf : 'application/pdf',
+  pfx : 'application/x-pkcs12',
+  pgm : 'image/x-portable-graymap',
+  png : 'image/png',
+  pnm : 'image/x-portable-anymap',
+  pot : 'application/vnd.ms-powerpoint',
+  ppa : 'application/vnd.ms-powerpoint',
+  ppm : 'image/x-portable-pixmap',
+  pps : 'application/vnd.ms-powerpoint',
+  ppt : 'application/vnd.ms-powerpoint',
+  pptx : 'application/vnd.ms-powerpoint',
+  ps : 'application/postscript',
+  pwz : 'application/vnd.ms-powerpoint',
+  py : 'text/x-python',
+  pyc : 'application/x-python-code',
+  pyo : 'application/x-python-code',
+  qt : 'video/quicktime',
+  ra : 'audio/x-pn-realaudio',
+  ram : 'application/x-pn-realaudio',
+  ras : 'image/x-cmu-raster',
+  rdf : 'application/xml',
+  rgb : 'image/x-rgb',
+  roff : 'application/x-troff',
+  rtx : 'text/richtext',
+  sgm : 'text/x-sgml',
+  sgml : 'text/x-sgml',
+  sh : 'application/x-sh',
+  shar : 'application/x-shar',
+  snd : 'audio/basic',
+  so : 'application/octet-stream',
+  src : 'application/x-wais-source',
+  swf : 'application/x-shockwave-flash',
+  t : 'application/x-troff',
+  tar : 'application/x-tar',
+  tcl : 'application/x-tcl',
+  tex : 'application/x-tex',
+  texi : 'application/x-texinfo',
+  texinfo : 'application/x-texinfo',
+  tif : 'image/tiff',
+  tiff : 'image/tiff',
+  tr : 'application/x-troff',
+  tsv : 'text/tab-separated-values',
+  txt : 'text/plain',
+  ustar : 'application/x-ustar',
+  vcf : 'text/x-vcard',
+  wav : 'audio/x-wav',
+  webm : 'video/webm',
+  wiz : 'application/msword',
+  wsdl : 'application/xml',
+  xbm : 'image/x-xbitmap',
+  xlb : 'application/vnd.ms-excel',
+  xls : 'application/vnd.ms-excel',
+  xlsx : 'application/vnd.ms-excel',
+  xml : 'text/xml',
+  xpdl : 'application/xml',
+  xpm : 'image/x-xpixmap',
+  xsl : 'application/xml',
+  xwd : 'image/x-xwindowdump',
+  zip : 'application/zip'
 };
