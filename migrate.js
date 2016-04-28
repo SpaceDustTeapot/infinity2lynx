@@ -1,21 +1,25 @@
 'use strict';
 
-var mongoHandler = require('./mongoDb');
-var mongo = require('mongodb');
-var vichanConnection = require('./mysqlDb').connection;
 var crypto = require('crypto');
+var mongo = require('mongodb');
+
+var mongoHandler = require('./mongoDb');
+var vichanConnection = require('./mysqlDb').connection;
+
+var mongoConnection = mongoHandler.conn();
 var users = mongoHandler.users();
 var threads = mongoHandler.threads();
-var mongoConnection = mongoHandler.conn();
+var logs = mongoHandler.logs();
+var bans = mongoHandler.bans();
+var aggregatedLogs = mongoHandler.aggregatedLogs();
 var posts = mongoHandler.posts();
 var boards = mongoHandler.boards();
+
 var boardPath;
 var lynxModName;
 
 // Mod migration {
 function migrateMod(foundMod, callback) {
-
-  console.log('Migrating mod ' + foundMod.username);
 
   var mod = {
     login : foundMod.username,
@@ -47,6 +51,8 @@ function iterateMods(foundMods, callback, index) {
   index = index || 0;
 
   if (index >= foundMods.length) {
+    console.log('\n\nMigrated ' + foundMods.length + ' mods.');
+
     callback();
     return;
 
@@ -70,146 +76,213 @@ function migrateMods(callback) {
   });
 
 }
-
 // } Mod migration
 
-function getBanList() {
+// Ban migration {
+function migrateBan(ban, callback) {
 
-  vichanConnection.query('SELECT * from bans', function(err, bans) {
-    for ( var i in bans) {
-      var ban = bans[i];
-      if (!ban) {
+  var expiration;
 
-      } else {
+  if (!ban.expires) {
+    expiration = new Date();
+    expiration.setUTCFullYear(expiration.getUTCFullYear() + 5);
+  } else {
+    expiration = new Date(ban.expires * 1000);
+  }
 
-        if (ban.expires === null) {
-          var expdate = null;
-        } else {
-          expdate = new Date(ban.expires * 1000);
-        }
+  var ipArray = [];
 
-        var banObj = {
-          appliedBy : lynxModName,
-          boardUri : ban.board,
-          reason : ban.reason,
-          denied : ban.seen,
-          ip : ban.ipstart
-        };
+  for (var i = 0; i < ban.ipstart.length; i++) {
+    ipArray.push(ban.ipstart[i]);
+  }
 
-        var blob = parseInt(banObj.ip[0]);
-        var ipArray = [];
+  var newBan = {
+    appliedBy : lynxModName,
+    reason : ban.reason,
+    expiration : expiration,
+    ip : ipArray
+  };
 
-        // create IP array
-        for (i = 0; i < 4; i++) {
-          ipArray.push(banObj.ip[i]);
-        }
+  if (ban.board) {
+    newBan.boardUri = ban.board;
+  }
 
-        banObj.ip = ipArray;
+  bans.insertOne(newBan, callback);
 
-        lynxCreate('bans', banObj);
-      }
-    }
-
-  });
 }
 
-function moveStaffLog() {
+function iterateBans(foundBans, callback, index) {
 
-  vichanConnection.query('SELECT * from modlogs', function(err, logs) {
-    for ( var i in logs) {
-      var len = logs.length;
-      var logz = logs[i];
-      if (!logz) {
+  index = index || 0;
 
-      } else {
-        var logObj = {
-          user : 'admin',
-          type : 'boardTransfer',
-          time : new Date(logz.time * 1000),
-          boardUri : logz.board,
-          description : logz.text,
-          global : 0
-        };
+  if (index >= foundBans.length) {
+    console.log('\n\nMigrated ' + foundBans.length + ' bans.');
+    callback();
+    return;
+  }
 
-        if (logz.board === null) {
-          logObj.global = 1;
-        }
+  migrateBan(foundBans[index], function migratedBan(error) {
 
-        lynxCreate('staffLogs', logObj);
-
-      }
+    if (error) {
+      callback(error);
+    } else {
+      iterateBans(foundBans, callback, ++index);
     }
 
   });
 
 }
 
-function fixThumb(th) {
+function migrateBans(callback) {
 
-  var len = th.length;
-  var Act = th;
-  var firstSlash = false;
-  var secondSlash = false;
-  var foundSlash = '';
-  var foundSecondSlash = '';
-  for (var i = 0; i < len; i++) {
-    var temp = Act.substr(i, 1);
+  vichanConnection.query('SELECT * from bans', function(error, foundBans) {
 
-    if ('/' === temp && firstSlash === false) {
-      firstSlash = true;
-      // 
-      foundSlash = Act.substr(0, i);
-
-    } else if ('/' === temp && firstSlash === true && secondSlash === false) {
-      secondSlash = true;
-
-      foundSecondSlash = Act.substr(i + 1, Act.length - i);
-
+    if (error) {
+      callback(error);
+    } else {
+      iterateBans(foundBans, callback);
     }
-  }
 
-  return '/' + foundSlash + '/thumb/t_' + foundSecondSlash;
-
+  });
 }
+// } Ban migration
 
-function fixImageUrl(img) {
-  var len = img.length;
-  var Act = img;
+// Log migration {
+function iterateDays(date, callback, foundResults) {
 
-  var firstSlash = false;
-  var secondSlash = false;
-  var foundSlash = '';
-  var foundSecondSlash = '';
-  for (var i = 0; i < len; i++) {
-    var temp = Act.substr(i, 1);
+  foundResults = foundResults || [];
 
-    if ('/' === temp && firstSlash === false) {
-      firstSlash = true;
+  if (date >= new Date()) {
+    aggregatedLogs.deleteMany({}, function clearedCollection(error) {
 
-      foundSlash = Act.substr(0, i);
-
-    } else if ('/' === temp && firstSlash === true && secondSlash === false) {
-      secondSlash = true;
-
-      foundSecondSlash = Act.substr(i + 1, Act.length - i);
-
-    }
-  }
-
-  return '/' + foundSlash + '/media/' + foundSecondSlash;
-
-}
-
-function lynxCreate(table, obj, callback) {
-  mongoConnection.collection(table, function(err, col) {
-    col.insert(obj, function() {
-
-      if (callback) {
-        callback();
+      if (error) {
+        callback(error);
+      } else {
+        aggregatedLogs.insertMany(foundResults, callback);
       }
+
     });
+
+    return;
+  }
+
+  var next = new Date(date);
+  next.setDate(next.getDate() + 1);
+
+  logs.aggregate([ {
+    $match : {
+      time : {
+        $gte : date,
+        $lt : next
+      }
+    }
+  }, {
+    $project : {
+      time : 1
+    }
+  }, {
+    $group : {
+      _id : 0,
+      ids : {
+        $push : '$_id'
+      }
+    }
+  } ], function gotLogs(error, results) {
+
+    if (error) {
+      callback();
+    } else {
+
+      if (results.length) {
+        foundResults.push({
+          logs : results[0].ids,
+          date : date
+        });
+      }
+
+      iterateDays(next, callback, foundResults);
+
+    }
+
+  });
+
+}
+
+function aggregateLogs(callback) {
+
+  logs.aggregate([ {
+    $project : {
+      time : 1,
+      _id : 0
+    }
+  }, {
+    $group : {
+      _id : 0,
+      time : {
+        $min : '$time'
+      }
+    }
+  } ], function gotOldestLog(error, results) {
+
+    if (error) {
+      callback(error);
+    } else if (!results.length) {
+      callback();
+    } else {
+      var earliest = results[0].time;
+
+      earliest.setHours(0);
+      earliest.setMinutes(0);
+      earliest.setSeconds(0);
+      earliest.setMilliseconds(0);
+
+      iterateDays(earliest, callback);
+    }
+
   });
 }
+
+function migrateLog(log, callback) {
+
+  logs.insertOne({
+    user : lynxModName,
+    type : 'boardTransfer',
+    time : new Date(log.time * 1000),
+    boardUri : log.board,
+    description : log.text.replace(/\d+.\d+.\d+.\d+/g, '[REDACTED]'),
+    global : log.board ? false : true
+  }, callback);
+
+}
+
+function iterateLogs(foundLogs, callback, index) {
+
+  index = index || 0;
+
+  if (index >= foundLogs.length) {
+    console.log('\n\nMigrated ' + foundLogs.length + ' logs.');
+    aggregateLogs(callback);
+    return;
+  }
+
+  migrateLog(foundLogs[index], function migratedLog(error) {
+    if (error) {
+      callback(error);
+    } else {
+      iterateLogs(foundLogs, callback, ++index);
+    }
+  });
+
+}
+
+function migrateLogs(callback) {
+
+  vichanConnection.query('SELECT * from modlogs', function(err, foundLogs) {
+    iterateLogs(foundLogs, callback);
+  });
+
+}
+// } Log migration
 
 // Gridfs handling {
 function writeFile(path, dest, mime, meta, callback) {
@@ -259,6 +332,14 @@ function getMessageHash(message) {
 }
 
 // File migration {
+function fixMediaUrl(img, thumb) {
+
+  var parts = img.split('/');
+
+  return '/' + parts[0] + '/media/' + (thumb ? 't_' : '') + parts[2];
+
+}
+
 function buildGridMeta(uri, file, posting, threadId, mimes, fixedfile,
     realthumb, thumb, callback) {
 
@@ -293,8 +374,8 @@ function migrateFile(uri, posting, threadId, infFile, callback) {
     callback();
   }
 
-  var fixedPath = fixImageUrl(infFile.file_path);
-  var fixedThumb = fixThumb(infFile.thumb_path);
+  var fixedPath = fixMediaUrl(infFile.file_path);
+  var fixedThumb = fixMediaUrl(infFile.thumb_path, true);
 
   console.log('Migrating file ' + fixedPath);
 
@@ -851,7 +932,20 @@ function migrateBoards(callback) {
 }
 // } Board migration
 
-exports.init = function(modName, path) {
+function migrateSecondaryData(callback) {
+
+  migrateBans(function migratedBans(error) {
+
+    if (error) {
+      callback(error);
+    } else {
+      migrateLogs(callback);
+    }
+
+  });
+}
+
+exports.init = function(modName, path, callback) {
 
   lynxModName = modName;
   boardPath = path;
@@ -859,14 +953,14 @@ exports.init = function(modName, path) {
   migrateBoards(function migratedBoards(error) {
 
     if (error) {
-      throw error;
+      callback(error);
     } else {
       migrateMods(function migratedMods(error) {
 
         if (error) {
-          throw error;
+          callback(error);
         } else {
-          // TODO
+          migrateSecondaryData(callback);
         }
 
       });
@@ -874,9 +968,6 @@ exports.init = function(modName, path) {
 
   });
 
-  // getBanList();
-
-  // moveStaffLog();
 };
 
 exports.MIMETYPES = {

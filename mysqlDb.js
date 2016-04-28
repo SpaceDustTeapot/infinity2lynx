@@ -58,13 +58,20 @@ function askDbDb(info, callback) {
 
 function askDbPort(info, callback) {
 
-  rl.question('Inform the port of Vichan database: ', function read(answer) {
+  rl.question('Inform the port of Vichan database(Defaults to 3306): ',
+      function read(answer) {
 
-    info.port = +(answer.trim());
+        answer = answer.trim();
 
-    askDbDb(info, callback);
+        if (!answer.length) {
+          answer = '3306';
+        }
 
-  });
+        info.port = +answer;
+
+        askDbDb(info, callback);
+
+      });
 
 }
 
@@ -106,6 +113,14 @@ exports.init = function(callback) {
 
   } catch (error) {
     askAddress(callback);
+  }
+
+};
+
+exports.close = function() {
+
+  if (exports.connection) {
+    exports.connection.destroy();
   }
 
 };

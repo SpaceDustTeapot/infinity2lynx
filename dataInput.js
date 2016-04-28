@@ -25,9 +25,17 @@ function getDirectory(user) {
     }
 
     try {
+
       if (!fs.lstatSync(answer).isDirectory()) {
         throw 'Not a directory';
       }
+
+      require('./migrate').init(user, answer, function migrated(error) {
+        console.log(error || '\n\nMigration finished.\n\n');
+
+        mongoDb.close();
+        mysqlDb.close();
+      });
 
     } catch (error) {
 
@@ -36,8 +44,6 @@ function getDirectory(user) {
       getDirectory();
 
     }
-
-    require('./migrate').init(user, answer);
 
   });
 
@@ -85,6 +91,7 @@ function connectMysql() {
 
     if (error) {
       console.log(error);
+      connectMysql();
 
     } else {
 
@@ -96,13 +103,17 @@ function connectMysql() {
 
 }
 
-mongoDb.init(function connected(error) {
+exports.getData = function() {
 
-  if (error) {
-    console.log(error);
-    process.exit();
-  } else {
-    connectMysql();
-  }
+  mongoDb.init(function connected(error) {
 
-});
+    if (error) {
+      console.log(error);
+      exports.getData();
+    } else {
+      connectMysql();
+    }
+
+  });
+
+};

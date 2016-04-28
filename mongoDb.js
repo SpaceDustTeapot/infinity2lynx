@@ -608,6 +608,7 @@ function connect(dbSettings, callback) {
   client.connect(connectString, function connectedDb(error, db) {
 
     if (error) {
+      loading = false;
       callback(error);
     } else {
 
@@ -678,13 +679,18 @@ function askDbDb(info, callback) {
 
 function askDbPort(info, callback) {
 
-  rl.question('Inform the port of LynxChan database: ', function read(answer) {
+  rl.question('Inform the port of LynxChan database(Defaults to 27017): ',
+      function read(answer) {
 
-    info.port = answer.trim();
+        info.port = answer.trim();
 
-    askDbDb(info, callback);
+        if (!info.port.length) {
+          info.port = '27017';
+        }
 
-  });
+        askDbDb(info, callback);
+
+      });
 
 }
 
@@ -725,6 +731,14 @@ exports.init = function(callback) {
 
   } catch (error) {
     askAddress(callback);
+  }
+
+};
+
+exports.close = function() {
+
+  if (cachedDb) {
+    cachedDb.close();
   }
 
 };
