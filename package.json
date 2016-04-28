@@ -1,0 +1,32 @@
+{
+	"name": "vichan2lynx",
+	"version": "1.0",
+	"readme": "read the HOWTO file",
+	"description":"Migrate from Vichan to Lynx with ease",
+	"author": "SpaceDustTeapot, Odilitime, StephenLynx",
+	"contributors": [{
+	  "name": "SpaceDustTeapot",
+	  "email": "spacedustmailpot@openmailbox.org"
+	},
+	{
+	 "name": "OdiliTime",
+	  "email": "janesmith@airmail.cc"
+	 },
+	{
+	 "name": "StephenLynx",
+	 "email": "sergio.a.vianna@gmail.com"
+	}],
+	"repository": {
+    	"type": "git",
+    	"url": "https://github.com/SpaceDustTeapot/infinity2lynx.git"
+  	},
+	  "version": "1.6.0",
+  	"dependencies": {
+    	"mongodb": "2.1.18",
+    	"mysql":"2.10.2"
+	
+  	},
+	"license": "MIT"
+	
+
+}
