@@ -2,7 +2,6 @@
 
 var crypto = require('crypto');
 var mongo = require('mongodb');
-var fs = require('fs');
 
 var mongoHandler = require('./mongoDb');
 var vichanConnection = require('./mysqlDb').connection;
@@ -18,12 +17,20 @@ var boards = mongoHandler.boards();
 
 var boardPath;
 var lynxModName;
+var fs = require('fs');
+var cheeky = "";
 
-function setWitnessedRelease()
-{
- //witnessedRelease.insertOne({ $set,{}});
+var currBoard;
+var updatedBoard = "Stevielonks";
+var processedReplyArray = new Array();
 
-}
+var rep_currBoard;
+var rep_updatedBoard = "stevielonks";
+var rep_processReplyArray = new Array();
+
+var th_currBoard;
+var th_updatedBoard = "stevielonks";
+var th_processReplyArray = new Array();
 
 // Mod migration {
 function migrateMod(foundMod, callback) {
@@ -293,8 +300,10 @@ function migrateLogs(callback) {
 
 // Gridfs handling {
 function writeFile(path, dest, mime, meta, callback) {
-
+ console.log("In writeFile"+ boardPath);
   path = boardPath + path;
+ console.log("in writeFile " + path);
+ console.log("Writefile mime " + mime);
 
   meta.lastModified = new Date();
 
@@ -320,8 +329,11 @@ function writeFileOnOpenFile(gs, path, destination, meta, mime, callback) {
 
     // style exception, too simple
     gs.close(function closed(closeError, result) {
-
+	
+	  if(error){console.log(error);
+				console.log(path);}
       callback(error || closeError);
+	  
     });
     // style exception, too simple
 
@@ -339,17 +351,17 @@ function getMessageHash(message) {
 }
 
 // File migration {
-function fixMediaUrl(img, thumb) {
+function fixMediaUrl(img,board, thumb) {
 
   var parts = img.split('/');
 
-  return '/' + parts[0] + '/media/' + (thumb ? 't_' : '') + parts[2];
+
+  return '/' + board + '/media/' + (thumb ? 't_' : '') + parts[2];
 
 }
 
 function buildGridMeta(uri, file, posting, threadId, mimes, fixedfile,
     realthumb, thumb, callback) {
-	
 
   var obj = {
     boardUri : uri,
@@ -381,11 +393,38 @@ function migrateFile(uri, posting, threadId, infFile, callback) {
   if (!mimeType) {
     callback();
   }
+	var skip = false;
+
+	if(currBoard == updatedBoard)
+	{
+		console.log("Checking replies!");
+		for(var i =0; i<  processedReplyArray.length;i++)
+		{
+		console.log("ProcessedReplyArray: "+processedReplyArray[i]);
+		 
+			if(processedReplyArray[i] == posting.id)
+			{
+				skip = true;
+				console.log("Skip: " + skip);
+			}
+		}
+	}
+	else
+	{
+	 updatedBoard = currBoard;
+	 processedReplyArray = new Array();
+	}
+	 
+	if(skip == false)
+	{
+		processedReplyArray.push(posting.id);
+	}
+
 
   var checkB = infFile.file_path.split("/");
 	if(infFile.thumb == "undefined")
 	{
-		var actThumb = infFile.thumb_path;
+		actThumb = infFile.thumb_path;
 	}
 	if(checkB == uri && mimeType == "video/webm")
 	{
@@ -398,17 +437,34 @@ function migrateFile(uri, posting, threadId, infFile, callback) {
 	 var actThumb = checkB[0] + "/thumb/"+infFile.thumb;
 	}
 
-  var fixedPath = fixMediaUrl(infFile.file_path);
-  var fixedThumb = fixMediaUrl(actThumb, true);
- var realThumb = boardPath + actThumb;
- var checkFile = boardPath + infFile.file_path;
+ // var actThumb = uri+"/thumb/"+infFile.thumb;
+  console.log("actThumb: " + actThumb); 
+ console.log("posting.file:" + JSON.parse(posting.files));
+console.log("posting.id" + posting.id);
 
+  var fixedPath = fixMediaUrl(infFile.file_path,uri);
+//  var fixedThumb = fixMediaUrl(infFile.thumb, true);
+	var fixedThumb = fixMediaUrl(actThumb,uri,true);
   console.log('Migrating file ' + fixedPath);
+  console.log("File stats: ", infFile.file_path);
+  //console.log("on Post:", posting);
+  console.log("fixedThumb " + fixedThumb);
+  var ignore = true;
+ //var checkThumb =  boardPath + "/" + actThumb;
+	var checkFile = boardPath + infFile.file_path;
+	console.log("checkFile: " + checkFile);
+	
+   var parts = infFile.file_path.split('/');
+   infFile.file_path = uri +"/"+ parts[1] +"/"+ parts[2];
+ //  console.log("rebuild: " + rebuil); 
+	console.log("after Rebuild: " + infFile.file_path);
+	checkFile = boardPath + infFile.file_path;
+	var realThumb = boardPath + actThumb;
+console.log(actThumb);
+console.log("real "+realThumb);
 
-
-	try
+try
 {
- var ignore = false;
 	console.log("Try");
 	var stats = fs.existsSync(checkFile);
 	console.log("Created STats instance");
@@ -422,14 +478,12 @@ function migrateFile(uri, posting, threadId, infFile, callback) {
 	{
 	console.log("not DIR");
 	//	ignore =true;
-	//callback();
-	infFile.file_path = "dud.jpg"
+	callback();
 	}
 	else
 	{
-		//callback();
-		//gnore =true;
-	infFile.file_path = "dud.jpg"
+		callback();
+		ignore =true;
 	}
 
 	console.log("File Status: " + stats);
@@ -444,15 +498,13 @@ function migrateFile(uri, posting, threadId, infFile, callback) {
 	else if(infFile.file == "deleted")
 	{
 	console.log("not DIR");
-	//	ignore =true;
-	//callback();
-	actThumb = "dud.png";
+		ignore =true;
+	callback();
 	}
 	else
 	{
-	//	callback();
-	//	ignore = true;
-	actThumb = "dud.png";
+		callback();
+		ignore = true;
 	}
 
 	console.log("Thumb status: " + thumbExist);
@@ -468,15 +520,17 @@ catch(e)
   console.log(e);
 } 
 
-//if(ignore == false)
- //{
+ if(ignore == false || skip == false)
+ {
 
+ skip = true;	
 
   buildGridMeta(uri, infFile, posting, threadId, mimeType, fixedPath,
       fixedThumb, actThumb, function migratedFiles(error) {
 
         if (error) {
-          callback(error);
+          //callback(error);
+		  callback();
         } else {
 
           callback(null, {
@@ -494,12 +548,8 @@ catch(e)
         }
 
       });
- //}
- //else{
- //console.log("STATUS: Skipping File");
- //return;
- //callback();
- //}
+	}
+
 }
 
 function iterateFiles(uri, posting, threadId, foundFiles, callback, builtFiles,
@@ -508,23 +558,9 @@ function iterateFiles(uri, posting, threadId, foundFiles, callback, builtFiles,
   builtFiles = builtFiles || [];
   index = index || 0;
 
-  console.log("index:"+ index);
-  //console.log("FoundFiles: " + foundFiles.length);
-  
-  if(foundFiles == null)
-  {
-   console.log("FoundFiles is null: SKIPPING!");
-   callback(null,builtFiles);
-   return;
-  }
-  else
-  {
-	console.log("foundFiles: " + foundFiles.length);
-  	if (index >= foundFiles.length) {
-  	  callback(null, builtFiles);
-  	  return;
-  	}
-
+  if (index >= foundFiles.length) {
+    callback(null, builtFiles);
+    return;
   }
 
   migrateFile(uri, posting, threadId, foundFiles[index], function(error,
@@ -618,9 +654,36 @@ function getMime(pathName) {
 function migrateReply(uri, thread, reply, callback) {
 
   console.log('Migrating reply ' + reply.id);
+  console.log("Reply " + reply.body);
+	var skip = false;
+	
+	if(rep_currBoard == rep_updatedBoard)
+	{
+		console.log("Checking replies!");
+		for(var i =0; i<  rep_processReplyArray.length;i++)
+		{
+		//console.log("ProcessedReplyArray: "+rep_processReplyArray[i]);
+		 
+			if(rep_processReplyArray[i] == reply.Id)
+			{
+				skip = true;
+				console.log("Skip: " + skip);
+			}
+		}
+	}
+	else
+	{
+	 rep_updatedBoard = rep_currBoard;
+	 rep_processReplyArray = new Array();
+	}
+	 
+	if(skip == false)
+	{
+		rep_processReplyArray.push(reply.id);
+	}
 
-  reply.body_nomarkup = reply.body_nomarkup || '';
-  reply.body = reply.body || '';
+	if (skip == true)
+	{
 
   posts.insertOne({
     boardUri : uri,
@@ -647,7 +710,9 @@ function migrateReply(uri, thread, reply, callback) {
     }
 
   });
-
+	}
+	skip = false;
+	callback();
 }
 
 function iterateReplies(uri, thread, foundReplies, callback, index) {
@@ -715,6 +780,9 @@ function aggregateThreadLatestReplies(uri, thread, callback) {
 function migrateReplies(uri, thread, callback) {
 
   var query = 'SELECT * from posts_' + uri + ' where thread=' + thread.id;
+  console.log("query, MigrateReplies " + query);
+ cheeky = uri;
+ currBoard = cheeky;
 
   vichanConnection.query(query, function(error, foundReplies) {
 
@@ -740,13 +808,42 @@ function migrateReplies(uri, thread, callback) {
 function migrateThread(uri, thread, callback) {
 
   console.log('\nMigrating thread ' + thread.id);
+  console.log("On board"+ uri);
+
+ 	var skip = false;
+	
+	if(th_currBoard == th_updatedBoard)
+	{
+		console.log("Checking replies!");
+		for(var i =0; i<  th_processReplyArray.length;i++)
+		{
+		//console.log("ProcessedReplyArray: "+rep_processReplyArray[i]);
+		 
+			if(th_processReplyArray[i] == thread.id)
+			{
+				skip = true;
+				console.log("Skip: " + skip);
+			}
+		}
+	}
+	else
+	{
+	 th_updatedBoard = th_currBoard;
+	 th_processReplyArray = new Array();
+	}
+	 
+	if(skip == false)
+	{
+		th_processReplyArray.push(thread.id);
+	}
+
+	if (skip == true)
+	{
+	skip = false;
 
   var thread_salt = crypto.createHash('sha256').update(
       'gunshot gunshot Cash registernoise' + Math.random() + new Date())
       .digest('hex');
-
-  thread.body = thread.body || '';
-  thread.nomarkup = thread.nomarkup || '';
 
   threads.insertOne({
     boardUri : uri,
@@ -762,6 +859,7 @@ function migrateThread(uri, thread, callback) {
     name : thread.name,
     pinned : thread.sticky ? true : false,
     locked : thread.locked ? true : false,
+	cyclic : thread.cycle ? true : false,
     subject : thread.subject,
     password : thread.password,
     markdown : thread.body,
@@ -784,7 +882,8 @@ function migrateThread(uri, thread, callback) {
     }
 
   });
-
+ }
+ callback();
 }
 
 function iterateThreads(uri, foundThreads, callback, index) {
@@ -814,6 +913,7 @@ function migrateThreads(uri, callback) {
   vichanConnection.query(
       'SELECT * from posts_' + uri + ' where thread IS NULL', function(error,
           foundThreads) {
+	console.log("MigrateThreads URI: "+uri);
 
         if (error) {
           callback(error);
@@ -1074,7 +1174,7 @@ exports.init = function(modName, path, callback) {
       callback(error);
     } else {
       migrateMods(function migratedMods(error) {
-
+	  console.log("what is boardpath? "+ path);
         if (error) {
           callback(error);
         } else {

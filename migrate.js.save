@@ -1,0 +1,78 @@
+'use strict';
+
+var crypto = require('crypto');
+var mongo = require('mongodb');
+
+var mongoHandler = require('./mongoDb');
+var vichanConnection = require('./mysqlDb').connection;
+
+var mongoConnection = mongoHandler.conn();
+var users = mongoHandler.users();
+var threads = mongoHandler.threads();
+var logs = mongoHandler.logs();
+var bans = mongoHandler.bans();
+var aggregatedLogs = mongoHandler.aggregatedLogs();
+var posts = mongoHandler.posts();
+var boards = mongoHandler.boards();
+
+var boardPath;
+var lynxModName;
+
+// Mod migration {
+function migrateMod(foundMod, callback) {
+
+  var mod = {
+    login : foundMod.username,
+    password : foundMod.password,
+    passwordSalt : foundMod.salt,
+    passwordMethod : 'vichan',
+    ownedBoards : [],
+    volunteeredBoards : null
+
+  };
+
+  switch (foundMod.type) {
+  case 30:
+    mod.globalRole = 1;
+    break;
+  case 20:
+    mod.globalRole = 2;
+    break;
+  default:
+    mod.globalRole = 3;
+  }
+
+  users.insertOne(mod, callback);
+
+}
+
+function iterateMods(foundMods, callback, index) {
+
+  index = index || 0;
+
+  if (index >= foundMods.length) {
+    console.log('\n\nMigrated ' + foundMods.length + ' mods.');
+
+    callback();
+    return;
+
+  }
+
+  migrateMod(foundMods[index], function migratedMod(error) {
+
+    if (error && error.code !== 11000) {
+      callback(error);
+    } else {
+      iterateMods(foundMods, callback, ++index);
+    }
+
+  });
+}
+
+function migrateMods(callback) {
+
+  vichanConnection.query('SELECT * from mods', function(err, foundMods) {
+    iterateMods(foundMods, callback);
+  });
+
+}
